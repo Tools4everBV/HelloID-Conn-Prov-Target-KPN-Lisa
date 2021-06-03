@@ -1,0 +1,44 @@
+[
+    {
+      "key": "TenantId",
+      "type": "input",
+      "templateOptions": {
+        "label": "AzureAD Tenant ID",
+        "required": true
+      }
+    },
+    {
+      "key": "ClientId",
+      "type": "input",
+      "templateOptions": {
+        "label": "AzureAD ClientId",
+        "required": true
+      }
+    },
+    {
+      "key": "ClientSecret",
+      "type": "input",
+      "templateOptions": {
+        "label": "AzureAD ClientSecret",
+        "type": "password",
+        "required": true
+      }
+    },
+    {
+      "key": "Scope",
+      "type": "input",
+      "templateOptions": {
+        "label": "Scope",
+        "required": true
+      }
+    },
+    {
+      "key": "BaseUrl",
+      "type": "input",
+      "templateOptions": {
+        "label": "BaseUrl",
+        "placeholder": "https://mwpapi.kpnwerkplek.com/api",
+        "required": true
+      }
+    }
+  ]

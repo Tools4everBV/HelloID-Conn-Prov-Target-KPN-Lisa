@@ -111,16 +111,14 @@ if (-not($dryRun -eq $true)) {
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
+        # Create user
         Write-Verbose "Creating KPN Lisa account for '$($personObj.DisplayName)'"
-
-        # Get user
         $splatParams = @{
             Uri     = "$($config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
             Method  = 'get'
             Headers = $authorizationHeaders
         }
         $userResponse = Invoke-RestMethod @splatParams
-
         if ($userResponse.count -eq 0) {
             $splatParams = @{
                 Uri     = "$($config.BaseUrl)/Users"
@@ -131,13 +129,27 @@ if (-not($dryRun -eq $true)) {
             $userResponse = Invoke-RestMethod @splatParams
             $objectId = $($userResponse.objectId)
             $auditMessage = "Account '$($personObj.DisplayName)' Created. Id: '$objectId"
+
+            #Set Default WorkSpaceProfile
+            $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile   "friendlyDisplayName": "Ontzorgd"
+
+            $splatParams = @{
+                Uri     = "$($config.BaseUrl)/Users/$objectId/WorkspaceProfiles"
+                Method  = 'PUT'
+                Headers = $authorizationHeaders
+                body    = ($workSpaceProfileGuid | ConvertTo-Json)
+            }
+            $null = Invoke-RestMethod @splatParams #If 200 it returns a Empty String
+            Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
+
         } elseif ( $userResponse.count -eq 1) {
             $userResponse = $userResponse.value
             $objectId = $($userResponse.id)
             $auditMessage = "Account '$($personObj.DisplayName)' Corrolated. Id: '$objectId"
         }
+
         if ($userResponse) {
-            # Lookup and set the manager in KPN Lisa
+            # Set the manager
             if ($managerObj) {
                 $splatParams = @{
                     Uri     = "$($config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($managerObj.managerExternalId)')"
@@ -153,11 +165,10 @@ if (-not($dryRun -eq $true)) {
                         Body    = ($managerResponse.Value.id | ConvertTo-Json)
                         Headers = $authorizationHeaders
                     }
-                    Invoke-RestMethod @splatParams
-
+                    $null = Invoke-RestMethod @splatParams
                     Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($personObj.DisplayName)'" -Verbose
                 } else {
-                    Write-Verbose "Manager not Found" -Verbose
+                    throw  "Manager not Found '$($managerObj.managerExternalId)'"
                 }
             }
             $success = $true

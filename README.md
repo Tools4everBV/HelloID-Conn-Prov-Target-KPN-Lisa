@@ -1,10 +1,7 @@
 # HelloID-Conn-Prov-Target-KPN-Lisa
 
-## Work in progress
-
-<p align="center">
-  <img src="https://uploads-eu-west-1.insided.com/kpn-business/attachment/b54b512e-da4c-4ffe-b7c6-3e542b33a0ce_thumb.png">
-</p>
+#### Connector is not yet implemented
+![Logo](asset/kpnicon.jpg)
 
 ## Table of contents
 
@@ -20,7 +17,7 @@
 
 ## Introduction
 
-The _HelloID-Conn-Prov-Target-KPN-Lisa_ is a cloud dekstop workplace application and provides a set of REST API's that allow you to programmatically interact with it's data.
+The _HelloID-Conn-Prov-Target-KPN-Lisa_ is a cloud desktop workplace application and provides a set of REST APIs that allow you to programmatically interact with its data. With the connector, you can manage the user's and user's authorizations. Which displays in two permissions references. One manages the groups and one the LicenseProfiles. And in addition, there will be a default WorkspaceProfle added to the account while creating the account.
 
 ## Getting started
 
@@ -47,8 +44,42 @@ The following settings are required to connect to the API.
 ### Remarks
 
 - When a new user is created in KPN Lisa, a default password is generated automatically by KPN Lisa. That password will also be returned in the response. At this point that password is not send back to HelloID.
+- The WorkspaceProfile is added hardcoded in the account create.ps1 as a recommendation from the supplier. Because its uncommon that an account needs a different WorkspaceProfile. When a different WorkspaceProfile is required they can request a self-service request to KPN. Or we must change the connector and manage the WorkspaceProfiles as Permissions.
+- The workspace profile is exclusively added when the account is created. The workspace profile will not be added on a account correlation
+
+### Contents
+
+| Files       | Description                                |
+| ----------- | ------------------------------------------ |
+| create.ps1                    | Creates or Correlates the account plus additional actions _(see below)_|
+| update.ps1                    | Update the account which additional actions _(see below)_   |
+| enable.ps1                    | Enables the account      |
+| disable.ps1                   | Disabale the account     |
+| delete.ps1                    | Deletes the account      |
+| entitlementsGroups.ps1        | Retrieves the groups                                      |
+| grantPermissionGroup.ps1      | Grant a group to an Account    |
+| revokePermissionGroup.ps1     | Revokes a group from an Account     |
+| entitlementsLicenseProfiles.ps1     | Retrieves the LicenseProfile        |
+| grantPermissionLicenseProfiles.ps1  | Grant a LicenseProfiles  to an Account    |
+| revokePermissionLicenseProfiles.ps1 | Revokes a LicenseProfile  from an Account   |
+
+##### Create
+
+  The Create/Update account performs multiple web calls to creating and modifying the Account. When one of the web calls fails the action will be marked as Failed.
+
+  - Create or corrolate a account in KPN Lisa
+  - Set the manager to the account
+  - Sets a default WorkSpaceProfile _(Ontzorgd/Assisted)_ Only on create!   # Hardcoded
+
+
+##### Update
+  - Update an account in KPN Lisa
+  - Update the manager the account _or_
+  - Remove the manager from the account
 
 ## Setup the connector
+
+The connector files include the account life cycle and two separate Permissions definitions.
 
 For help setting up a new target connector, please refer to our [documentation](https://docs.helloid.com/hc/en-us/articles/360012388639-How-to-add-a-target-system)
 

@@ -90,3 +90,4 @@ For help setting up a new target connector, please refer to our [documentation](
 ## HelloID Docs
 
 The official HelloID documentation can be found at: https://docs.helloid.com/
+Specific info by the provider about the Kpn Lisa api Itself can be found at  https://mwpapi.kpnwerkplek.com/index.html

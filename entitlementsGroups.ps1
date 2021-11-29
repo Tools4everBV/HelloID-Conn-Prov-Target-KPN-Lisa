@@ -14,7 +14,7 @@ function Invoke-LisaRestMethod {
         $Endpoint,
 
         [Parameter(Mandatory = $true)]
-        [Microsoft.PowerShell.Commands.WebRequestMethod]
+        [string]
         $Method,
 
         [Parameter(Mandatory = $false)]

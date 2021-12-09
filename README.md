@@ -1,6 +1,5 @@
 # HelloID-Conn-Prov-Target-KPN-Lisa
 
-#### Connector is not yet implemented
 ![Logo](https://static.kpn.com/images/logo/logo.svg)
 
 ## Table of contents

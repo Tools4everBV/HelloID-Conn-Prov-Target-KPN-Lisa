@@ -3,29 +3,34 @@
 #
 # Version: 1.0.0.0
 #####################################################
-$VerbosePreference = "Continue"
 
-# Initialize default value's
+#region Config
 $Config = $Configuration | ConvertFrom-Json
+
+# - Add your configuration variables here -
+$Uri = $Config.Uri
+#endregion Config
+
+#region default properties
 $p = $person | ConvertFrom-Json
-$aRef = $AccountReference | ConvertFrom-Json
+$m = $manager | ConvertFrom-Json
+$pp = $previousPerson | ConvertFrom-Json
 $pd = $personDifferences | ConvertFrom-Json
-$success = $false
-$m = [PSCustomObject]@{
-    ExternalId = $p.PrimaryManager.ExternalId
-}
 
-# Mapping
-$account = [PSCustomObject]@{
-    givenName                = $p.Name.NickName
-    surName                  = $p.Name.FamilyName
-    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
-    displayName              = $p.DisplayName
-    changePasswordNextSignIn = $false
-    usageLocation            = 'NL'
-}
+$aRef = $accountReference | ConvertFrom-Json
+$mRef = $managerAccountReference | ConvertFrom-Json
 
-#Region internal functions
+$auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
+#endregion default properties
+
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
+
+#region functions - Write functions logic here
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -47,7 +52,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+        $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -69,6 +74,7 @@ function Get-LisaAccessToken {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
+
 
 function Resolve-HTTPError {
     [CmdletBinding()]
@@ -96,34 +102,48 @@ function Resolve-HTTPError {
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
 }
-#EndRegion
+#endregion functions
 
-if (-not($dryRun -eq $true)) {
-    try {
-        Write-Verbose 'Getting accessToken'
+# Build the Final Account object
+$Account = @{
+    givenName                = $p.Name.NickName
+    surName                  = $p.Name.FamilyName
+    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
+    displayName              = $p.DisplayName
+    changePasswordNextSignIn = $false
+    usageLocation            = 'NL'
+}
 
-        $splatGetTokenParams = @{
-            TenantId     = $Config.TenantId
-            ClientId     = $Config.ClientId
-            ClientSecret = $Config.ClientSecret
-            Scope        = $Config.Scope
-        }
+$Success = $False
 
-        $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+# Start Script
+try {
+    Write-Verbose 'Getting accessToken'
 
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-        $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    $splatGetTokenParams = @{
+        TenantId     = $Config.TenantId
+        ClientId     = $Config.ClientId
+        ClientSecret = $Config.ClientSecret
+        Scope        = $Config.Scope
+    }
 
-        Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
+    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
 
-        $splatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$aRef"
-            Method  = 'PATCH'
-            Headers = $authorizationHeaders
-        }
+    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Content-Type", "application/json")
+    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
+    Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
+
+    $splatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$aRef"
+        Method  = 'PATCH'
+        Headers = $authorizationHeaders
+    }
+
+    # TODO:: Create smaller dryrun scope
+    if (-not($dryRun -eq $true)) {
         if ( ($pd.Name.GivenName) -and ($pd.Name.GivenName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
                 propertyName = "givenName"
@@ -131,7 +151,12 @@ if (-not($dryRun -eq $true)) {
             } | ConvertTo-Json
             $null = Invoke-RestMethod @splatParams
             $success = $true
-            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                    IsError = $false
+                })
         }
         if ( ($pd.Name.FamilyName) -and ($pd.Name.FamilyName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
@@ -140,7 +165,12 @@ if (-not($dryRun -eq $true)) {
             } | ConvertTo-Json
             $null = Invoke-RestMethod @splatParams
             $success = $true
-            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                    IsError = $false
+                })
         }
         if ($null -eq $m) {
             $splatDeleteManagerParams = @{
@@ -150,7 +180,12 @@ if (-not($dryRun -eq $true)) {
             }
             $null = Invoke-RestMethod @splatDeleteManagerParams
             $success = $true
-            $auditMessage = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                    Message = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+                    IsError = $false
+                })
         }
         elseif ( ($pd.PrimaryManager.PersonId) -and ($pd.PrimaryManager.PersonId.Change -eq "Updated") ) {
             $splatUpdateManagerParams = @{
@@ -161,26 +196,44 @@ if (-not($dryRun -eq $true)) {
             }
             $null = Invoke-RestMethod @splatUpdateManagerParams
             $success = $true
-            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
-        }
-    }
-    catch {
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($p.DisplayName)' not updated. Error: $errorMessage"
-        }
-        else {
-            $auditMessage = "Account for '$($p.DisplayName)' not updated. Error: $($ex.Exception.Message)"
+
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                    IsError = $false
+                })
         }
     }
 }
+catch {
+    $ex = $PSItem
+    if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorMessage = Resolve-HTTPError -Error $ex
+    }
+    else {
+        $errorMessage = $ex.Exception.Message
+    }
 
-$result = [PSCustomObject]@{
-    Success          = $success
-    Account          = $account
-    AccountReference = $($userResponse.objectId)
-    AuditDetails     = $auditMessage
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+            Message = "Account for '$($p.DisplayName)' not updated. Error: $errorMessage"
+            IsError = $false
+        })
 }
 
-Write-Output $result | ConvertTo-Json -Depth 10
+# Send results
+$Result = [PSCustomObject]@{
+    Success          = $Success
+    AuditLogs        = $AuditLogs
+    Account          = $Account
+    PreviousAccount  = $PreviousAccount
+
+    # Optionally return data for use in other systems
+    # ExportData      = [PSCustomObject]@{
+    #     DisplayName = $Account.DisplayName
+    #     UserName    = $Account.UserName
+    #     ExternalId  = $aRef
+    # }
+}
+
+Write-Output $Result | ConvertTo-Json -Depth 10

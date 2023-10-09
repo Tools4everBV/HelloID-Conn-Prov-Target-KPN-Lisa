@@ -3,28 +3,29 @@
 #
 # Version: 1.0.0.0
 #####################################################
-$VerbosePreference = "Continue"
 
-# Initialize default value's
-$Config = $configuration | ConvertFrom-Json
-$p = $person | ConvertFrom-Json
-$m = [PSCustomObject]@{
-    ExternalId = $p.PrimaryManager.ExternalId
-}
+#region Config
+$Config = $Configuration | ConvertFrom-Json
+#endregion Config
 
-$Success = $false
+#region default properties
+$p = $Person | ConvertFrom-Json
+$m = $Manager | ConvertFrom-Json
 
-# Mapping
-$account = [PSCustomObject]@{
-    givenName                = $p.Name.NickName
-    surName                  = $p.Name.FamilyName
-    userPrincipalName        = "$($p.ExternalId)"".onmicrosoft.com"
-    displayName              = $p.DisplayName
-    changePasswordNextSignIn = $false
-    usageLocation            = 'NL'
-}
+$aRef = $null # New-Guid
+$mRef = $managerAccountReference | ConvertFrom-Json
 
-#Region internal functions
+$AuditLogs = [Collections.Generic.List[PSCustomObject]]::new()
+#endregion default properties
+
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
+
+#region functions - Write functions logic here
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -46,7 +47,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+        $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -57,7 +58,7 @@ function Get-LisaAccessToken {
         }
 
         $splatRestMethodParameters = @{
-            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
+            Uri     = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
             Method  = 'POST'
             Headers = $headers
             Body    = $body
@@ -68,6 +69,7 @@ function Get-LisaAccessToken {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
+
 
 function Resolve-HTTPError {
     [CmdletBinding()]
@@ -94,105 +96,153 @@ function Resolve-HTTPError {
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
 }
-#EndRegion
+#endregion functions
 
-if (-not($dryRun -eq $true)) {
-    try {
-        Write-Verbose 'Getting accessToken'
-        $splatGetTokenParams = @{
-            TenantId     = $Config.TenantId
-            ClientId     = $Config.ClientId
-            ClientSecret = $Config.ClientSecret
-            Scope        = $Config.Scope
-        }
-        $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-        $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+# Build the Final Account object
+$Account = @{
+    givenName                = $p.Name.NickName
+    surName                  = $p.Name.FamilyName
+    userPrincipalName        = "$($p.ExternalId).onmicrosoft.com"
+    displayName              = $p.DisplayName
+    changePasswordNextSignIn = $false
+    usageLocation            = 'NL'
+}
 
-        # Create user
-        Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
+$Success = $False
+
+# Start Script
+try {
+    Write-Verbose 'Getting accessToken'
+
+    $splatGetTokenParams = @{
+        TenantId     = $Config.TenantId
+        ClientId     = $Config.ClientId
+        ClientSecret = $Config.ClientSecret
+        Scope        = $Config.Scope
+    }
+    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+
+    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Content-Type", "application/json")
+    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+
+    # Create user
+    Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
+
+    $splatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
+        Method  = 'get'
+        Headers = $authorizationHeaders
+    }
+    $userResponse = Invoke-RestMethod @splatParams
+    if ($userResponse.count -eq 0) {
         $splatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
-            Method  = 'get'
+            Uri     = "$($Config.BaseUrl)/Users"
+            Method  = 'POST'
+            Body    = ($account | ConvertTo-Json)
             Headers = $authorizationHeaders
         }
-        $userResponse = Invoke-RestMethod @splatParams
-        if ($userResponse.count -eq 0) {
-            $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users"
-                Method  = 'POST'
-                Body    = ($account | ConvertTo-Json)
-                Headers = $authorizationHeaders
-            }
+
+        if (-not($dryRun -eq $true)) {
             $userResponse = Invoke-RestMethod @splatParams
-            $objectId = $($userResponse.objectId)
-            $auditMessage = "Account '$($p.DisplayName)' Created. Id: '$objectId"
+            $aRef = $($userResponse.objectId)
 
-            #Set Default WorkSpaceProfile
-            $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile   "friendlyDisplayName": "Ontzorgd"
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "CreateAccount" # Optionally specify a different action for this audit log
+                    Message = "Created account for '$($p.DisplayName)'. Id: $($aRef)"
+                    IsError = $False
+                })
+        }
 
-            $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$objectId/WorkspaceProfiles"
-                Method  = 'PUT'
-                Headers = $authorizationHeaders
-                body    = ($workSpaceProfileGuid | ConvertTo-Json)
-            }
+        #Set Default WorkSpaceProfile
+        $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile  "friendlyDisplayName": "Ontzorgd"
+
+        $splatParams = @{
+            Uri     = "$($Config.BaseUrl)/Users/$aRef/WorkspaceProfiles"
+            Method  = 'PUT'
+            Headers = $authorizationHeaders
+            body    = ($workSpaceProfileGuid | ConvertTo-Json)
+        }
+
+        if (-not($dryRun -eq $true)) {
             $null = Invoke-RestMethod @splatParams #If 200 it returns a Empty String
-            Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
-
-        }
-        elseif ( $userResponse.count -eq 1) {
-            $userResponse = $userResponse.value
-            $objectId = $($userResponse.id)
-            $auditMessage = "Account '$($p.DisplayName)' Corrolated. Id: '$objectId"
         }
 
-        if ($userResponse) {
-            # Set the manager
-            if ($m) {
+        Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
+
+    }
+    elseif ( $userResponse.count -eq 1) {
+        $userResponse = $userResponse.value
+        $aRef = $($userResponse.id)
+
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "CreateAccount" # Optionally specify a different action for this audit log
+                Message = "Correlated to account with id $($aRef)"
+                IsError = $False
+            })
+    }
+
+    if ($userResponse) {
+        # Set the manager
+        if ($m) {
+            $splatParams = @{
+                Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($m.ExternalId)')"
+                Method  = 'GET'
+                Headers = $authorizationHeaders
+            }
+            $managerResponse = Invoke-RestMethod @splatParams
+
+            if ($managerResponse.count -eq 1) {
                 $splatParams = @{
-                    Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($m.ExternalId)')"
-                    Method  = 'GET'
+                    Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
+                    Method  = 'Put'
+                    Body    = ($managerResponse.Value.id | ConvertTo-Json)
                     Headers = $authorizationHeaders
                 }
-                $managerResponse = Invoke-RestMethod @splatParams
 
-                if ($managerResponse.count -eq 1) {
-                    $splatParams = @{
-                        Uri     = "$($Config.BaseUrl)/Users/$($objectId)/Manager"
-                        Method  = 'Put'
-                        Body    = ($managerResponse.Value.id | ConvertTo-Json)
-                        Headers = $authorizationHeaders
-                    }
+                if (-not($dryRun -eq $true)) {
                     $null = Invoke-RestMethod @splatParams
-                    Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
                 }
-                else {
-                    throw  "Manager not Found '$($m.ExternalId)'"
-                }
+
+                Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
             }
-            $Success = $true
+            else {
+                throw  "Manager not Found '$($m.ExternalId)'"
+            }
         }
-    }
-    catch {
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($p.DisplayName)' not created. Error: $errorMessage"
-        }
-        else {
-            $auditMessage = "Account for '$($p.DisplayName)' not created. Error: $($ex.Exception.Message)"
-        }
+        $Success = $true
     }
 }
+catch {
+    $ex = $PSItem
+    if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorMessage = Resolve-HTTPError -Error $ex
+    }
+    else {
+        $errorMessage = $ex.Exception.Message
+    }
+
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "CreateAccount" # Optionally specify a different action for this audit log
+            Message = "Account for '$($p.DisplayName)' not created. Error: $errorMessage"
+            IsError = $True
+        })
+}
+
 
 $result = [PSCustomObject]@{
     Success          = $Success
+    AccountReference = $aRef
+    AuditLogs        = $AuditLogs
     Account          = $account
-    AccountReference = $objectId
-    AuditDetails     = $auditMessage
+
+    # Optionally return data for use in other systems
+    # ExportData = [PSCustomObject]@{
+    #     DisplayName = $Account.DisplayName
+    #     UserName    = $Account.UserName
+    #     ExternalId  = $aRef
+    # }
 }
 
 Write-Output $result | ConvertTo-Json -Depth 10

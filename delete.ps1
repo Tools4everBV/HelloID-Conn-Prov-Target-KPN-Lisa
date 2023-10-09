@@ -3,15 +3,29 @@
 #
 # Version: 1.0.0.0
 #####################################################
-$VerbosePreference = "Continue"
 
-# Initialize default value's
-$Config = $configuration | ConvertFrom-Json
+#region Config
+$Config = $Configuration | ConvertFrom-Json
+#endregion Config
+
+#region default properties
 $p = $person | ConvertFrom-Json
-$aRef = $accountReference | ConvertFrom-Json
-$Success = $false
+$m = $manager | ConvertFrom-Json
 
-#Region internal functions
+$aRef = $accountReference | ConvertFrom-Json
+$mRef = $managerAccountReference | ConvertFrom-Json
+
+$AuditLogs = [Collections.Generic.List[PSCustomObject]]::new()
+#endregion default properties
+
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
+
+#region functions - Write functions logic here
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -33,7 +47,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+        $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -55,6 +69,7 @@ function Get-LisaAccessToken {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
+
 
 function Resolve-HTTPError {
     [CmdletBinding()]
@@ -81,50 +96,71 @@ function Resolve-HTTPError {
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
 }
-#EndRegion
+#endregion functions
 
-if (-not($dryRun -eq $true)) {
-    try {
-        Write-Verbose 'Getting accessToken'
-        $splatGetTokenParams = @{
-            TenantId     = $Config.TenantId
-            ClientId     = $Config.ClientId
-            ClientSecret = $Config.ClientSecret
-            Scope        = $Config.Scope
-        }
-        $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-        $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+# Build the Final Account object
+$Account = @{ }
 
-        Write-Verbose "Removing KPN Lisa account for '$($p.DisplayName)'"
-        $splatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
-            Method  = 'DELETE'
-            Headers = $authorizationHeaders
-        }
+$Success = $False
+
+# Start Script
+try {
+    Write-Verbose 'Getting accessToken'
+
+    $splatGetTokenParams = @{
+        TenantId     = $Config.TenantId
+        ClientId     = $Config.ClientId
+        ClientSecret = $Config.ClientSecret
+        Scope        = $Config.Scope
+    }
+    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+
+    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Content-Type", "application/json")
+    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+
+    Write-Verbose "Removing KPN Lisa account for '$($p.DisplayName)'"
+
+    $splatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
+        Method  = 'DELETE'
+        Headers = $authorizationHeaders
+    }
+
+    if (-not($dryRun -eq $true)) {
         $null = Invoke-RestMethod @splatParams
-        $Success = $true
-        $auditMessage = "Account for '$($p.DisplayName)' is deleted"
     }
-    catch {
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($p.DisplayName)' not deleted. Error: $errorMessage"
-        }
-        else {
-            $auditMessage = "Account for '$($p.DisplayName)' not deleted. Error: $($ex.Exception.Message)"
-        }
+
+    $Success = $true
+
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "DeleteAccount" # Optionally specify a different action for this audit log
+            Message = "Account for '$($p.DisplayName)' is deleted"
+            IsError = $False
+        })
+
+}
+catch {
+    $ex = $PSItem
+    if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorMessage = Resolve-HTTPError -Error $ex
     }
+    else {
+        $errorMessage = $ex.Exception.Message
+    }
+
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "DeleteAccount" # Optionally specify a different action for this audit log
+            Message = "Account for '$($p.DisplayName)' not deleted. Error: $errorMessage"
+            IsError = $True
+        })
 }
 
 $result = [PSCustomObject]@{
-    Success          = $Success
-    Account          = $account
-    AccountReference = $aRef
-    AuditDetails     = $auditMessage
+    Success   = $Success
+    AuditLogs = $AuditLogs
+    Account   = $account
 }
 
 Write-Output $result | ConvertTo-Json -Depth 10

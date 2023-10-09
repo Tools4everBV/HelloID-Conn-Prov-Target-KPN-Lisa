@@ -6,20 +6,20 @@
 $VerbosePreference = "Continue"
 
 # Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$personObj = $person | ConvertFrom-Json
-$managerObj = [PSCustomObject]@{
-    managerExternalId = $personObj.PrimaryManager.ExternalId
+$Config = $configuration | ConvertFrom-Json
+$p = $person | ConvertFrom-Json
+$m = [PSCustomObject]@{
+    ExternalId = $p.PrimaryManager.ExternalId
 }
 
-$success = $false
+$Success = $false
 
 # Mapping
 $account = [PSCustomObject]@{
-    givenName                = $personObj.Name.NickName
-    surName                  = $personObj.Name.FamilyName
-    userPrincipalName        = "$($personObj.ExternalId)"".onmicrosoft.com"
-    displayName              = $personObj.DisplayName
+    givenName                = $p.Name.NickName
+    surName                  = $p.Name.FamilyName
+    userPrincipalName        = "$($p.ExternalId)"".onmicrosoft.com"
+    displayName              = $p.DisplayName
     changePasswordNextSignIn = $false
     usageLocation            = 'NL'
 }
@@ -46,7 +46,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -63,7 +63,8 @@ function Get-LisaAccessToken {
             Body    = $body
         }
         Invoke-RestMethod @splatRestMethodParameters
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -76,6 +77,7 @@ function Resolve-HTTPError {
         )]
         [object]$ErrorObject
     )
+
     process {
         $HttpErrorObj = @{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
@@ -84,12 +86,10 @@ function Resolve-HTTPError {
         }
         if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
             $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
-        } elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj['ErrorMessage'] = $errorResponse
+        }
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            $reader = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream())
+            $HttpErrorObj['ErrorMessage'] = $reader.ReadToEnd()
         }
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
@@ -100,41 +100,41 @@ if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose 'Getting accessToken'
         $splatGetTokenParams = @{
-            TenantId     = $config.TenantId
-            ClientId     = $config.ClientId
-            ClientSecret = $config.ClientSecret
-            Scope        = $config.Scope
+            TenantId     = $Config.TenantId
+            ClientId     = $Config.ClientId
+            ClientSecret = $Config.ClientSecret
+            Scope        = $Config.Scope
         }
         $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
         # Create user
-        Write-Verbose "Creating KPN Lisa account for '$($personObj.DisplayName)'"
+        Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
         $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
+            Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
             Method  = 'get'
             Headers = $authorizationHeaders
         }
         $userResponse = Invoke-RestMethod @splatParams
         if ($userResponse.count -eq 0) {
             $splatParams = @{
-                Uri     = "$($config.BaseUrl)/Users"
+                Uri     = "$($Config.BaseUrl)/Users"
                 Method  = 'POST'
                 Body    = ($account | ConvertTo-Json)
                 Headers = $authorizationHeaders
             }
             $userResponse = Invoke-RestMethod @splatParams
             $objectId = $($userResponse.objectId)
-            $auditMessage = "Account '$($personObj.DisplayName)' Created. Id: '$objectId"
+            $auditMessage = "Account '$($p.DisplayName)' Created. Id: '$objectId"
 
             #Set Default WorkSpaceProfile
             $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile   "friendlyDisplayName": "Ontzorgd"
 
             $splatParams = @{
-                Uri     = "$($config.BaseUrl)/Users/$objectId/WorkspaceProfiles"
+                Uri     = "$($Config.BaseUrl)/Users/$objectId/WorkspaceProfiles"
                 Method  = 'PUT'
                 Headers = $authorizationHeaders
                 body    = ($workSpaceProfileGuid | ConvertTo-Json)
@@ -142,17 +142,18 @@ if (-not($dryRun -eq $true)) {
             $null = Invoke-RestMethod @splatParams #If 200 it returns a Empty String
             Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
 
-        } elseif ( $userResponse.count -eq 1) {
+        }
+        elseif ( $userResponse.count -eq 1) {
             $userResponse = $userResponse.value
             $objectId = $($userResponse.id)
-            $auditMessage = "Account '$($personObj.DisplayName)' Corrolated. Id: '$objectId"
+            $auditMessage = "Account '$($p.DisplayName)' Corrolated. Id: '$objectId"
         }
 
         if ($userResponse) {
             # Set the manager
-            if ($managerObj) {
+            if ($m) {
                 $splatParams = @{
-                    Uri     = "$($config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($managerObj.managerExternalId)')"
+                    Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($m.ExternalId)')"
                     Method  = 'GET'
                     Headers = $authorizationHeaders
                 }
@@ -160,32 +161,35 @@ if (-not($dryRun -eq $true)) {
 
                 if ($managerResponse.count -eq 1) {
                     $splatParams = @{
-                        Uri     = "$($config.BaseUrl)/Users/$($objectId)/Manager"
+                        Uri     = "$($Config.BaseUrl)/Users/$($objectId)/Manager"
                         Method  = 'Put'
                         Body    = ($managerResponse.Value.id | ConvertTo-Json)
                         Headers = $authorizationHeaders
                     }
                     $null = Invoke-RestMethod @splatParams
-                    Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($personObj.DisplayName)'" -Verbose
-                } else {
-                    throw  "Manager not Found '$($managerObj.managerExternalId)'"
+                    Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
+                }
+                else {
+                    throw  "Manager not Found '$($m.ExternalId)'"
                 }
             }
-            $success = $true
+            $Success = $true
         }
-    } catch {
+    }
+    catch {
         $ex = $PSItem
         if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
             $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($personObj.DisplayName)' not created. Error: $errorMessage"
-        } else {
-            $auditMessage = "Account for '$($personObj.DisplayName)' not created. Error: $($ex.Exception.Message)"
+            $auditMessage = "Account for '$($p.DisplayName)' not created. Error: $errorMessage"
+        }
+        else {
+            $auditMessage = "Account for '$($p.DisplayName)' not created. Error: $($ex.Exception.Message)"
         }
     }
 }
 
 $result = [PSCustomObject]@{
-    Success          = $success
+    Success          = $Success
     Account          = $account
     AccountReference = $objectId
     AuditDetails     = $auditMessage

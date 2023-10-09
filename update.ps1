@@ -6,21 +6,21 @@
 $VerbosePreference = "Continue"
 
 # Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$personObj = $person | ConvertFrom-Json
+$Config = $Configuration | ConvertFrom-Json
+$p = $person | ConvertFrom-Json
 $aRef = $AccountReference | ConvertFrom-Json
 $pd = $personDifferences | ConvertFrom-Json
 $success = $false
-$managerObj = [PSCustomObject]@{
-    managerExternalId = $personObj.PrimaryManager.ExternalId
+$m = [PSCustomObject]@{
+    ExternalId = $p.PrimaryManager.ExternalId
 }
 
 # Mapping
 $account = [PSCustomObject]@{
-    givenName                = $personObj.Name.NickName
-    surName                  = $personObj.Name.FamilyName
-    userPrincipalName        = "$($personObj.ExternalId)@impegno.onmicrosoft.com"
-    displayName              = $personObj.DisplayName
+    givenName                = $p.Name.NickName
+    surName                  = $p.Name.FamilyName
+    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
+    displayName              = $p.DisplayName
     changePasswordNextSignIn = $false
     usageLocation            = 'NL'
 }
@@ -47,7 +47,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -78,21 +78,20 @@ function Resolve-HTTPError {
         )]
         [object]$ErrorObject
     )
+
     process {
         $HttpErrorObj = @{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
             InvocationInfo        = $ErrorObject.InvocationInfo.MyCommand
             TargetObject          = $ErrorObject.TargetObject.RequestUri
         }
+
         if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
             $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
         }
         elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj['ErrorMessage'] = $errorResponse
+            $reader = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream())
+            $HttpErrorObj['ErrorMessage'] = $reader.ReadToEnd()
         }
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
@@ -102,72 +101,77 @@ function Resolve-HTTPError {
 if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose 'Getting accessToken'
+
         $splatGetTokenParams = @{
-            TenantId     = $config.TenantId
-            ClientId     = $config.ClientId
-            ClientSecret = $config.ClientSecret
-            Scope        = $config.Scope
+            TenantId     = $Config.TenantId
+            ClientId     = $Config.ClientId
+            ClientSecret = $Config.ClientSecret
+            Scope        = $Config.Scope
         }
+
         $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"$per
+
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-        Write-Verbose "Updating KPN Lisa account for '$($personObj.DisplayName)'"
+        Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
+
         $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$aRef"
+            Uri     = "$($Config.BaseUrl)/Users/$aRef"
             Method  = 'PATCH'
             Headers = $authorizationHeaders
         }
 
-        if ( ($pd.Name.GivenName) -and ($pd.Name.GivenName.Change -eq "Updated") ){
+        if ( ($pd.Name.GivenName) -and ($pd.Name.GivenName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
                 propertyName = "givenName"
                 value        = $($pd.Name.GivenName.New)
             } | ConvertTo-Json
             $null = Invoke-RestMethod @splatParams
             $success = $true
-            $auditMessage = "Account for '$($personObj.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
         }
-        if ( ($pd.Name.FamilyName) -and ($pd.Name.FamilyName.Change -eq "Updated") ){
+        if ( ($pd.Name.FamilyName) -and ($pd.Name.FamilyName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
                 propertyName = "surName"
                 value        = $($pd.Name.FamilyName.New)
             } | ConvertTo-Json
             $null = Invoke-RestMethod @splatParams
             $success = $true
-            $auditMessage = "Account for '$($personObj.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
         }
-        if ($null -eq $managerObj){
+        if ($null -eq $m) {
             $splatDeleteManagerParams = @{
-                Uri     = "$($config.BaseUrl)/Users/$aRef/manager"
+                Uri     = "$($Config.BaseUrl)/Users/$aRef/manager"
                 Method  = 'DELETE'
                 Headers = $authorizationHeaders
             }
             $null = Invoke-RestMethod @splatDeleteManagerParams
             $success = $true
-            $auditMessage = "Manager for '$($personObj.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+            $auditMessage = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
         }
-        elseif ( ($pd.PrimaryManager.PersonId) -and ($pd.PrimaryManager.PersonId.Change -eq "Updated") ){
+        elseif ( ($pd.PrimaryManager.PersonId) -and ($pd.PrimaryManager.PersonId.Change -eq "Updated") ) {
             $splatUpdateManagerParams = @{
-                Uri     = "$($config.BaseUrl)/Users/$($objectId)/Manager"
+                Uri     = "$($Config.BaseUrl)/Users/$($objectId)/Manager"
                 Method  = 'PUT'
                 Body    = ($pd.PrimaryManager.PersonId.New | ConvertTo-Json)
                 Headers = $authorizationHeaders
             }
             $null = Invoke-RestMethod @splatUpdateManagerParams
             $success = $true
-            $auditMessage = "Account for '$($personObj.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+            $auditMessage = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
         }
-    } catch {
+    }
+    catch {
         $ex = $PSItem
         if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
             $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($personObj.DisplayName)' not updated. Error: $errorMessage"
+            $auditMessage = "Account for '$($p.DisplayName)' not updated. Error: $errorMessage"
         }
         else {
-            $auditMessage = "Account for '$($personObj.DisplayName)' not updated. Error: $($ex.Exception.Message)"
+            $auditMessage = "Account for '$($p.DisplayName)' not updated. Error: $($ex.Exception.Message)"
         }
     }
 }

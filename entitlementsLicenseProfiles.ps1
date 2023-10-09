@@ -1,4 +1,4 @@
-$c = $configuration | ConvertFrom-Json
+$Config = $configuration | ConvertFrom-Json
 $VerbosePreference = "Continue"
 
 #region functions
@@ -23,7 +23,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -40,7 +40,8 @@ function Get-LisaAccessToken {
             Body    = $body
         }
         Invoke-RestMethod @splatRestMethodParameters
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -48,27 +49,32 @@ function Get-LisaAccessToken {
 #endregion functions
 
 $splatGetTokenParams = @{
-    TenantId     = $c.TenantId
-    ClientId     = $c.ClientId
-    ClientSecret = $c.ClientSecret
-    Scope        = $c.Scope
+    TenantId     = $Config.TenantId
+    ClientId     = $Config.ClientId
+    ClientSecret = $Config.ClientSecret
+    Scope        = $Config.Scope
 }
 
 $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-$authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+
+$authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
 $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
 $authorizationHeaders.Add("Content-Type", "application/json")
 $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-
 $splatParams = @{
-    Uri     = "$($c.BaseUrl)/LicenseProfiles"
+    Uri     = "$($Config.BaseUrl)/LicenseProfiles"
     Headers = $authorizationHeaders
     Method  = 'Get'
 }
 $resultLicenseProfiles = (Invoke-RestMethod @splatParams)
 
-$permissions = $resultLicenseProfiles.value | Select-Object @{Name = 'DisplayName'; Expression = { $_.DisplayName } },
-@{Name = "Identification"; Expression = { @{Reference = $_.groupId } } }
+$permissions = $resultLicenseProfiles.value | Select-Object @{
+    Name = 'DisplayName'
+    Expression = { $_.DisplayName }
+}, @{
+    Name = "Identification"
+    Expression = { @{Reference = $_.groupId } }
+}
 
 Write-Output ($permissions | ConvertTo-Json -Depth 10)

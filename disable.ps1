@@ -6,8 +6,8 @@
 $VerbosePreference = "Continue"
 
 # Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$personObj = $person | ConvertFrom-Json
+$Config = $Configuration | ConvertFrom-Json
+$p = $person | ConvertFrom-Json
 $aRef = $accountReference | ConvertFrom-Json
 $success = $false
 
@@ -33,7 +33,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -64,6 +64,7 @@ function Resolve-HTTPError {
         )]
         [object]$ErrorObject
     )
+
     process {
         $HttpErrorObj = @{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
@@ -74,11 +75,8 @@ function Resolve-HTTPError {
             $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
         }
         elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj['ErrorMessage'] = $errorResponse
+            $reader = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream())
+            $HttpErrorObj['ErrorMessage'] = $reader.ReadToEnd()
         }
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
@@ -89,21 +87,21 @@ if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose 'Getting accessToken'
         $splatGetTokenParams = @{
-            TenantId     = $config.TenantId
-            ClientId     = $config.ClientId
-            ClientSecret = $config.ClientSecret
-            Scope        = $config.Scope
+            TenantId     = $Config.TenantId
+            ClientId     = $Config.ClientId
+            ClientSecret = $Config.ClientSecret
+            Scope        = $Config.Scope
         }
 
         $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-        Write-Verbose "Disable KPN Lisa account for '$($personObj.DisplayName)'"
+        Write-Verbose "Disable KPN Lisa account for '$($p.DisplayName)'"
         $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$aRef"
+            Uri     = "$($Config.BaseUrl)/Users/$aRef"
             Method  = 'PATCH'
             Headers = $authorizationHeaders
             Body    = [PSCustomObject]@{
@@ -114,16 +112,16 @@ if (-not($dryRun -eq $true)) {
         }
         $null = Invoke-RestMethod @splatParams
         $success = $true
-        $auditMessage = "Account for '$($personObj.DisplayName)' is disabled"
+        $auditMessage = "Account for '$($p.DisplayName)' is disabled"
     }
     catch {
         $ex = $PSItem
         if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
             $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($personObj.DisplayName)' not disabled. Error: $errorMessage"
+            $auditMessage = "Account for '$($p.DisplayName)' not disabled. Error: $errorMessage"
         }
         else {
-            $auditMessage = "Account for '$($personObj.DisplayName)' not disabled. Error: $($ex.Exception.Message)"
+            $auditMessage = "Account for '$($p.DisplayName)' not disabled. Error: $($ex.Exception.Message)"
         }
     }
 }

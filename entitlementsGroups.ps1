@@ -1,4 +1,4 @@
-$c = $configuration | ConvertFrom-Json
+$Config = $configuration | ConvertFrom-Json
 $VerbosePreference = "Continue"
 
 #region functions
@@ -31,7 +31,7 @@ function Invoke-LisaRestMethod {
 
     try {
         Write-Verbose 'Setting authorizationHeaders'
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
@@ -48,13 +48,14 @@ function Invoke-LisaRestMethod {
             $splatParams['body'] = $body
         }
 
-        $returnValue = New-Object 'System.Collections.Generic.List[object]'
+        $returnValue = [System.Collections.Generic.List[object]]::new()
         do {
             #Set the nextlink token to the Request URL
             if ($rawResult.nextLink) {
                 if ($splatParams['Uri'] -match '\?' ) {
                     $splatParams['Uri'] = "$($requestUrl)&SkipToken=$($rawResult.nextLink)"
-                } else {
+                }
+                else {
                     $splatParams['Uri'] = "$($requestUrl)?SkipToken=$($rawResult.nextLink)"
                 }
             }
@@ -64,14 +65,16 @@ function Invoke-LisaRestMethod {
             if ($rawResult.value -is [Object[]]) {
                 Write-Verbose 'Retrieving paged results'
                 $returnValue.AddRange($rawResult.value)
-            } else {
+            }
+            else {
                 $returnValue.add($rawResult.value)
             }
 
         }until([string]::IsNullOrWhiteSpace($rawResult.nextLink))
 
         Write-Output $returnValue
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -96,7 +99,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -113,7 +116,8 @@ function Get-LisaAccessToken {
             Body    = $body
         }
         Invoke-RestMethod @splatRestMethodParameters
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -121,22 +125,21 @@ function Get-LisaAccessToken {
 #endregion functions
 
 $splatGetTokenParams = @{
-    TenantId     = $c.TenantId
-    ClientId     = $c.ClientId
-    ClientSecret = $c.ClientSecret
-    Scope        = $c.Scope
+    TenantId     = $Config.TenantId
+    ClientId     = $Config.ClientId
+    ClientSecret = $Config.ClientSecret
+    Scope        = $Config.Scope
 }
 
 try {
     $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-} catch {
+}
+catch {
     throw "Could not get Lisa AccesToken, $($_)"
 }
 
-
-
 $splatParams = @{
-    Uri         = "$($c.BaseUrl)"
+    Uri         = "$($Config.BaseUrl)"
     Endpoint    = "groups"
     Method      = 'Get'
     AccessToken = $accessToken
@@ -144,13 +147,18 @@ $splatParams = @{
 
 try {
     $resultGroups = (Invoke-LisaRestMethod @splatParams)
-} catch {
+}
+catch {
     throw "Could not get Lisa Groups, $($_)"
 }
 
+$permissions = $resultGroups | Select-Object @{
+    Name       = 'DisplayName'
+    Expression = { $_.DisplayName }
+}, @{
+    Name       = "Identification"
+    Expression = { @{Reference = $_.id} }
+}
 
-
-$permissions = $resultGroups | Select-Object @{Name = 'DisplayName'; Expression = { $_.DisplayName } },
-@{Name = "Identification"; Expression = { @{Reference = $_.id } } }
 
 Write-Output ($permissions | ConvertTo-Json -Depth 10)

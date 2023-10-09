@@ -1,8 +1,8 @@
-$c = $configuration | ConvertFrom-Json;
-$success = $False;
-$auditLogs = New-Object Collections.Generic.List[PSCustomObject];
-$aRef = $accountReference | ConvertFrom-Json;
-$pRef = $permissionReference | ConvertFrom-Json;
+$Config = $configuration | ConvertFrom-Json
+$success = $False
+$auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
+$aRef = $accountReference | ConvertFrom-Json
+$pRef = $permissionReference | ConvertFrom-Json
 
 #region functions
 function Get-LisaAccessToken {
@@ -26,7 +26,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -43,7 +43,8 @@ function Get-LisaAccessToken {
             Body    = $body
         }
         Invoke-RestMethod @splatRestMethodParameters
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -52,38 +53,40 @@ function Get-LisaAccessToken {
 if (-Not($dryRun -eq $true)) {
     try {
         $splatGetTokenParams = @{
-            TenantId     = $c.TenantId
-            ClientId     = $c.ClientId
-            ClientSecret = $c.ClientSecret
-            Scope        = $c.Scope
+            TenantId     = $Config.TenantId
+            ClientId     = $Config.ClientId
+            ClientSecret = $Config.ClientSecret
+            Scope        = $Config.Scope
         }
 
         $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-
         $splatParams = @{
-            Uri     = "$($c.BaseUrl)/Users/$($aRef)/groups/$($pRef.Reference)"
+            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/groups/$($pRef.Reference)"
             Headers = $authorizationHeaders
             Method  = 'Delete'
         }
+
         try {
             $null = (Invoke-RestMethod @splatParams)
-        } catch {
+        }
+        catch {
             if ($_ -match "InvalidOperation") {
                 $InvalidOperation = $true   # Group not exists
                 Write-Verbose "$($_.Errordetails.message)" -Verbose
-            } else {
+            }
+            else {
                 throw "Could not delete member from group, $($_.Exception.Message) $($_.Errordetails.message)".trim(" ")
             }
         }
 
         if ($InvalidOperation) {
             $splatParams = @{
-                Uri     = "$($c.BaseUrl)/Users/$($aRef)/groups"
+                Uri     = "$($Config.BaseUrl)/Users/$($aRef)/groups"
                 Headers = $authorizationHeaders
                 Method  = 'Get'
             }
@@ -94,27 +97,28 @@ if (-Not($dryRun -eq $true)) {
             }
         }
 
-        $success = $True;
+        $success = $True
         $auditLogs.Add([PSCustomObject]@{
-                Message = "Permission $($pRef.Reference) removed from account $($aRef)";
-                IsError = $False;
-            });
+                Message = "Permission $($pRef.Reference) removed from account $($aRef)"
+                IsError = $False
+            })
 
-    } catch {
+    }
+    catch {
         Write-Error "$( $_.Exception.Message)"
         $auditLogs.Add([PSCustomObject]@{
-                Message = "Failed to remove Permission $($pRef.Reference) from account $($aRef)";
-                IsError = $true;
-            });
+                Message = "Failed to remove Permission $($pRef.Reference) from account $($aRef)"
+                IsError = $true
+            })
 
     }
 }
 
 # Send results
 $result = [PSCustomObject]@{
-    Success   = $success;
-    AuditLogs = $auditLogs;
-    Account   = [PSCustomObject]@{ };
-};
+    Success   = $success
+    AuditLogs = $auditLogs
+    Account   = [PSCustomObject]@{ }
+}
 
-Write-Output $result | ConvertTo-Json -Depth 10;
+Write-Output $result | ConvertTo-Json -Depth 10

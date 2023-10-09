@@ -1,10 +1,10 @@
-$c = $configuration | ConvertFrom-Json;
-$success = $False;
-$auditLogs = New-Object Collections.Generic.List[PSCustomObject];
+$Config = $configuration | ConvertFrom-Json
+$success = $False
+$auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
 
-$p = $person | ConvertFrom-Json;
-$aRef = $accountReference | ConvertFrom-Json;
-$pRef = $permissionReference | ConvertFrom-Json;
+$p = $person | ConvertFrom-Json
+$aRef = $accountReference | ConvertFrom-Json
+$pRef = $permissionReference | ConvertFrom-Json
 
 #region functions
 function Get-LisaAccessToken {
@@ -28,7 +28,7 @@ function Get-LisaAccessToken {
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $headers.Add("Content-Type", "application/x-www-form-urlencoded")
 
         $body = @{
@@ -45,7 +45,8 @@ function Get-LisaAccessToken {
             Body    = $body
         }
         Invoke-RestMethod @splatRestMethodParameters
-    } catch {
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
@@ -58,20 +59,20 @@ function Resolve-HTTPError {
         )]
         [object]$ErrorObject
     )
+
     process {
         $HttpErrorObj = @{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
             InvocationInfo        = $ErrorObject.InvocationInfo.MyCommand
             TargetObject          = $ErrorObject.TargetObject.RequestUri
         }
+
         if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
             $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
-        } elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj['ErrorMessage'] = $errorResponse
+        }
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            $reader = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream())
+            $HttpErrorObj['ErrorMessage'] = $reader.ReadToEnd()
         }
         Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
     }
@@ -81,46 +82,48 @@ function Resolve-HTTPError {
 if (-Not($dryRun -eq $true)) {
     try {
         $splatGetTokenParams = @{
-            TenantId     = $c.TenantId
-            ClientId     = $c.ClientId
-            ClientSecret = $c.ClientSecret
-            Scope        = $c.Scope
+            TenantId     = $Config.TenantId
+            ClientId     = $Config.ClientId
+            ClientSecret = $Config.ClientSecret
+            Scope        = $Config.Scope
         }
 
         $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-
         $splatParams = @{
-            Uri     = "$($c.BaseUrl)/Users/$($aRef)/LicenseProfiles/$($pRef.Reference)"
+            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/LicenseProfiles/$($pRef.Reference)"
             Headers = $authorizationHeaders
             Method  = 'Delete'
         }
+
         $null = (Invoke-RestMethod @splatParams) #If 200 it returns a Empty String
-        $success = $True;
+
+        $success = $True
+
         $auditLogs.Add([PSCustomObject]@{
-                Message = "Permission $($pRef.Reference) removed from account $($aRef)";
-                IsError = $False;
-            });
-    } catch {
+                Message = "Permission $($pRef.Reference) removed from account $($aRef)"
+                IsError = $False
+            })
+    }
+    catch {
         #write-verbose -verbose "($_)"
         $auditLogs.Add([PSCustomObject]@{
-                Message = "Failed to remove permission $($pRef.Reference) from account $($aRef)";
-                IsError = $False;
-            });
+                Message = "Failed to remove permission $($pRef.Reference) from account $($aRef)"
+                IsError = $False
+            })
     }
 }
 
-
-
 # Send results
 $result = [PSCustomObject]@{
-    Success   = $success;
-    AuditLogs = $auditLogs;
-    Account   = [PSCustomObject]@{ };
-};
+    Success   = $success
+    AuditLogs = $auditLogs
+    Account   = [PSCustomObject]@{ }
+}
 
-Write-Output $result | ConvertTo-Json -Depth 10;
+Write-Output $result | ConvertTo-Json -Depth 10

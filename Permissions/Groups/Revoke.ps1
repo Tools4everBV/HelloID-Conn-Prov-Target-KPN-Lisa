@@ -8,41 +8,36 @@ $pRef = $permissionReference | ConvertFrom-Json
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $Scope
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-        $headers.Add("Content-Type", "application/x-www-form-urlencoded")
-
-        $body = @{
-            grant_type    = "client_credentials"
-            client_id     = $ClientId
-            client_secret = $ClientSecret
-            scope         = $Scope
+        $RestMethod = @{
+            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
+            ContentType = "application/x-www-form-urlencoded"
+            Method      = "Post"
+            Body        = @{
+                grant_type    = "client_credentials"
+                client_id     = $ClientId
+                client_secret = $ClientSecret
+                scope         = $Scope
+            }
         }
-
-        $splatRestMethodParameters = @{
-            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
-            Method  = 'POST'
-            Headers = $headers
-            Body    = $body
-        }
-        Invoke-RestMethod @splatRestMethodParameters
+        Invoke-RestMethod @RestMethod
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
@@ -72,7 +67,7 @@ if (-Not($dryRun -eq $true)) {
         }
 
         try {
-            $null = (Invoke-RestMethod @splatParams)
+            [void] (Invoke-RestMethod @splatParams)
         }
         catch {
             if ($_ -match "InvalidOperation") {

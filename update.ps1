@@ -6,9 +6,6 @@
 
 #region Config
 $Config = $Configuration | ConvertFrom-Json
-
-# - Add your configuration variables here -
-$Uri = $Config.Uri
 #endregion Config
 
 #region default properties
@@ -30,45 +27,40 @@ $auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
     [Net.SecurityProtocolType]::Tls12
 )
 
-#region functions - Write functions logic here
+#region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $Scope
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-        $headers.Add("Content-Type", "application/x-www-form-urlencoded")
-
-        $body = @{
-            grant_type    = "client_credentials"
-            client_id     = $ClientId
-            client_secret = $ClientSecret
-            scope         = $Scope
+        $RestMethod = @{
+            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
+            ContentType = "application/x-www-form-urlencoded"
+            Method      = "Post"
+            Body        = @{
+                grant_type    = "client_credentials"
+                client_id     = $ClientId
+                client_secret = $ClientSecret
+                scope         = $Scope
+            }
         }
-
-        $splatRestMethodParameters = @{
-            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
-            Method  = 'POST'
-            Headers = $headers
-            Body    = $body
-        }
-        Invoke-RestMethod @splatRestMethodParameters
+        Invoke-RestMethod @RestMethod
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
@@ -79,27 +71,66 @@ function Get-LisaAccessToken {
 function Resolve-HTTPError {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory,
-            ValueFromPipeline
-        )]
-        [object]$ErrorObject
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object]
+        $ErrorObject
     )
 
     process {
-        $HttpErrorObj = @{
+        $httpError = [PSCustomObject]@{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            InvocationInfo        = $ErrorObject.InvocationInfo.MyCommand
-            TargetObject          = $ErrorObject.TargetObject.RequestUri
+            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
+            RequestUri            = $ErrorObject.TargetObject.RequestUri
+            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
+            ErrorMessage          = ''
         }
 
         if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
-            $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
+            $httpError.ErrorMessage = $ErrorObject.ErrorDetails.Message
         }
         elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $reader = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream())
-            $HttpErrorObj['ErrorMessage'] = $reader.ReadToEnd()
+            $httpError.ErrorMessage = [System.IO.StreamReader]::new(
+                $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
         }
-        Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
+
+        Write-Output $httpError
+    }
+}
+
+
+function Get-ErrorMessage {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object]
+        $ErrorObject
+    )
+
+    process {
+        $errorMessage = [PSCustomObject]@{
+            VerboseErrorMessage = $null
+            AuditErrorMessage   = $null
+        }
+
+        if (
+            $ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException' -or
+            $ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException'
+        ) {
+            $httpErrorObject = Resolve-HTTPError -Error $ErrorObject
+
+            $errorMessage.VerboseErrorMessage = $httpErrorObject.ErrorMessage
+            $errorMessage.AuditErrorMessage = $httpErrorObject.ErrorMessage
+        }
+
+        # If error message empty, fall back on $ex.Exception.Message
+        if ([String]::IsNullOrEmpty($errorMessage.VerboseErrorMessage)) {
+            $errorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
+        }
+        if ([String]::IsNullOrEmpty($errorMessage.AuditErrorMessage)) {
+            $errorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
+        }
+
+        Write-Output $errorMessage
     }
 }
 #endregion functions
@@ -149,7 +180,7 @@ try {
                 propertyName = "givenName"
                 value        = $($pd.Name.GivenName.New)
             } | ConvertTo-Json
-            $null = Invoke-RestMethod @splatParams
+            [void] (Invoke-RestMethod @splatParams)
             $success = $true
 
             $AuditLogs.Add([PSCustomObject]@{
@@ -163,7 +194,7 @@ try {
                 propertyName = "surName"
                 value        = $($pd.Name.FamilyName.New)
             } | ConvertTo-Json
-            $null = Invoke-RestMethod @splatParams
+            [void] (Invoke-RestMethod @splatParams)
             $success = $true
 
             $AuditLogs.Add([PSCustomObject]@{
@@ -178,7 +209,7 @@ try {
                 Method  = 'DELETE'
                 Headers = $authorizationHeaders
             }
-            $null = Invoke-RestMethod @splatDeleteManagerParams
+            [void] (Invoke-RestMethod @splatDeleteManagerParams)
             $success = $true
 
             $AuditLogs.Add([PSCustomObject]@{
@@ -194,7 +225,7 @@ try {
                 Body    = ($pd.PrimaryManager.PersonId.New | ConvertTo-Json)
                 Headers = $authorizationHeaders
             }
-            $null = Invoke-RestMethod @splatUpdateManagerParams
+            [void] (Invoke-RestMethod @splatUpdateManagerParams)
             $success = $true
 
             $AuditLogs.Add([PSCustomObject]@{
@@ -207,17 +238,14 @@ try {
 }
 catch {
     $ex = $PSItem
-    if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-        $errorMessage = Resolve-HTTPError -Error $ex
-    }
-    else {
-        $errorMessage = $ex.Exception.Message
-    }
+    $errorMessage = Get-ErrorMessage -ErrorObject $ex
 
-    $AuditLogs.Add([PSCustomObject]@{
+    Write-Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($errorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
+
+    $auditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($p.DisplayName)' not updated. Error: $errorMessage"
-            IsError = $false
+            Message = "Error updating account [$($account.DisplayName) ($($aRef))]. Error Message: $($errorMessage.AuditErrorMessage)."
+            IsError = $True
         })
 }
 

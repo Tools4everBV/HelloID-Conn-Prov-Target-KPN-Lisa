@@ -31,7 +31,7 @@ function Invoke-LisaRestMethod {
 
     try {
         Write-Verbose 'Setting authorizationHeaders'
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
         $authorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
         $authorizationHeaders.Add("Content-Type", "application/json")
         $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
@@ -78,50 +78,46 @@ function Invoke-LisaRestMethod {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
+
+
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $Scope
     )
 
     try {
-        $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-        $headers.Add("Content-Type", "application/x-www-form-urlencoded")
-
-        $body = @{
-            grant_type    = "client_credentials"
-            client_id     = $ClientId
-            client_secret = $ClientSecret
-            scope         = $Scope
+        $RestMethod = @{
+            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
+            ContentType = "application/x-www-form-urlencoded"
+            Method      = "Post"
+            Body        = @{
+                grant_type    = "client_credentials"
+                client_id     = $ClientId
+                client_secret = $ClientSecret
+                scope         = $Scope
+            }
         }
-
-        $splatRestMethodParameters = @{
-            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
-            Method  = 'POST'
-            Headers = $headers
-            Body    = $body
-        }
-        Invoke-RestMethod @splatRestMethodParameters
+        Invoke-RestMethod @RestMethod
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
-
 #endregion functions
 
 $splatGetTokenParams = @{

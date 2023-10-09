@@ -131,7 +131,7 @@ try {
     Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
 
     $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($account.userPrincipalName)')"
+        Uri     = "$($Config.BaseUrl)/Users?filter=EmployeeID+eq+'$($p.ExternalId)'"
         Method  = 'get'
         Headers = $authorizationHeaders
     }
@@ -187,7 +187,7 @@ try {
         # Set the manager
         if ($m) {
             $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users?filter=startswith(userprincipalname,'$($m.ExternalId)')"
+                Uri     = "$($Config.BaseUrl)/Users?filter=EmployeeID+eq+'$($m.ExternalId)'"
                 Method  = 'GET'
                 Headers = $authorizationHeaders
             }

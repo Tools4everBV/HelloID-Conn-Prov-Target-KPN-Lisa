@@ -463,31 +463,19 @@ try {
             })
 
         # Set the manager
-        if ($m) {
+        if ($mRef) {
             $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users?filter=EmployeeID+eq+'$($m.ExternalId)'"
-                Method  = 'GET'
+                Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
+                Method  = 'Put'
+                Body    = ($mRef | ConvertTo-Json)
                 Headers = $authorizationHeaders
             }
-            $managerResponse = Invoke-RestMethod @splatParams
 
-            if ($managerResponse.count -eq 1) {
-                $splatParams = @{
-                    Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
-                    Method  = 'Put'
-                    Body    = ($managerResponse.Value.id | ConvertTo-Json)
-                    Headers = $authorizationHeaders
-                }
-
-                if (-not($dryRun -eq $true)) {
-                    [void] (Invoke-RestMethod @splatParams)
-                }
-
-                Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
+            if (-not($dryRun -eq $true)) {
+                [void] (Invoke-RestMethod @splatParams)
             }
-            else {
-                throw  "Manager not Found '$($m.ExternalId)'"
-            }
+
+            Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
         }
         $Success = $true
     }

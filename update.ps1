@@ -28,6 +28,52 @@ $auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
 )
 
 #region functions
+function Get-SurName {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $person
+    )
+
+    process {
+        $FamilyName = "$($person.name.FamilyNamePrefix) $($person.name.FamilyName)".Trim()
+        $PartnerName = "$($person.name.FamilyNamePartnerPrefix) $($person.name.FamilyNamePartner)".Trim()
+
+        switch ($person.name.convention) {
+            'B' {
+                return $FamilyName
+            }
+            'P' {
+                return $PartnerName
+            }
+            'BP' {
+                return "$($FamilyName) - $($PartnerName)"
+            }
+            'PB' {
+                return "$($PartnerName) - $($FamilyName)"
+            }
+        }
+    }
+}
+
+
+function Get-DisplayName {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $person
+    )
+
+    process {
+        $SurName = Get-SurName -person $person
+
+        return "$($person.name.NickName) $SurName"
+    }
+}
+
+
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -137,12 +183,18 @@ function Get-ErrorMessage {
 
 # Build the Final Account object
 $Account = @{
-    givenName                = $p.Name.NickName
-    surName                  = $p.Name.FamilyName
-#    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
-    displayName              = $p.DisplayName
-#    changePasswordNextSignIn = $false
-#    usageLocation            = 'NL'
+    givenName      = $p.Name.NickName
+    surName        = Get-SurName $p
+    displayName    = Get-DisplayName $p
+
+    employeeId     = $p.ExternalId
+    officeLocation = $p.PrimaryContract.Department.DisplayName
+    department     = $p.PrimaryContract.Department.DisplayName
+    jobTitle       = $p.PrimaryContract.Title.Name
+    companyName    = $p.PrimaryContract.Organization.Name
+    businessPhones = @(
+                         $p.Contact.Business.Phone.Mobile
+                     )
 }
 
 $Success = $False
@@ -168,72 +220,61 @@ try {
     Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
 
     $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
-        Method  = 'PATCH'
+        Uri     = "$($Config.BaseUrl)/Users/$($aRef)/bulk"
+        Method  = 'Patch'
         Headers = $authorizationHeaders
+        Body    = ($Account | convertto-json)
     }
 
-    # TODO:: Create smaller dryrun scope
     if (-not($dryRun -eq $true)) {
-        if ( ($pd.Name.GivenName) -and ($pd.Name.GivenName.Change -eq "Updated") ) {
-            $splatParams['Body'] = [PSCustomObject]@{
-                propertyName = "givenName"
-                value        = $pd.Name.GivenName.New
-            } | ConvertTo-Json
-            [void] (Invoke-RestMethod @splatParams)
-            $success = $true
+        [void] (Invoke-RestMethod @splatParams)
+    }
 
-            $AuditLogs.Add([PSCustomObject]@{
-                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
-                    IsError = $false
-                })
-        }
-        if ( ($pd.Name.FamilyName) -and ($pd.Name.FamilyName.Change -eq "Updated") ) {
-            $splatParams['Body'] = [PSCustomObject]@{
-                propertyName = "surName"
-                value        = $pd.Name.FamilyName.New
-            } | ConvertTo-Json
-            [void] (Invoke-RestMethod @splatParams)
-            $success = $true
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+            Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($aRef)'"
+            IsError = $false
+        })
 
-            $AuditLogs.Add([PSCustomObject]@{
-                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
-                    IsError = $false
-                })
+    # TODO:: Create smaller dryrun scope
+    if ($null -eq $mRef) {
+        $splatDeleteManagerParams = @{
+            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/manager"
+            Method  = 'Delete'
+            Headers = $authorizationHeaders
         }
-        if ($null -eq $m) {
-            $splatDeleteManagerParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$aRef/manager"
-                Method  = 'DELETE'
-                Headers = $authorizationHeaders
-            }
+
+        if (-not($dryRun -eq $true)) {
             [void] (Invoke-RestMethod @splatDeleteManagerParams)
-            $success = $true
-
-            $AuditLogs.Add([PSCustomObject]@{
-                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                    Message = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
-                    IsError = $false
-                })
         }
-        elseif ( ($pd.PrimaryManager.PersonId) -and ($pd.PrimaryManager.PersonId.Change -eq "Updated") ) {
-            $splatUpdateManagerParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$($objectId)/Manager"
-                Method  = 'PUT'
-                Body    = ($pd.PrimaryManager.PersonId.New | ConvertTo-Json)
-                Headers = $authorizationHeaders
-            }
+
+        $success = $true
+
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                Message = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+                IsError = $false
+            })
+    }
+    else {
+        $splatUpdateManagerParams = @{
+            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
+            Method  = 'Put'
+            Headers = $authorizationHeaders
+            Body    = ($mRef | ConvertTo-Json)
+        }
+
+        if (-not($dryRun -eq $true)) {
             [void] (Invoke-RestMethod @splatUpdateManagerParams)
-            $success = $true
-
-            $AuditLogs.Add([PSCustomObject]@{
-                    Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                    Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
-                    IsError = $false
-                })
         }
+
+        $success = $true
+
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                Message = "Manager for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                IsError = $false
+            })
     }
 }
 catch {

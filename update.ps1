@@ -139,10 +139,10 @@ function Get-ErrorMessage {
 $Account = @{
     givenName                = $p.Name.NickName
     surName                  = $p.Name.FamilyName
-    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
+#    userPrincipalName        = "$($p.ExternalId)@impegno.onmicrosoft.com"
     displayName              = $p.DisplayName
-    changePasswordNextSignIn = $false
-    usageLocation            = 'NL'
+#    changePasswordNextSignIn = $false
+#    usageLocation            = 'NL'
 }
 
 $Success = $False
@@ -168,7 +168,7 @@ try {
     Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
 
     $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$aRef"
+        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
         Method  = 'PATCH'
         Headers = $authorizationHeaders
     }
@@ -178,7 +178,7 @@ try {
         if ( ($pd.Name.GivenName) -and ($pd.Name.GivenName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
                 propertyName = "givenName"
-                value        = $($pd.Name.GivenName.New)
+                value        = $pd.Name.GivenName.New
             } | ConvertTo-Json
             [void] (Invoke-RestMethod @splatParams)
             $success = $true
@@ -192,7 +192,7 @@ try {
         if ( ($pd.Name.FamilyName) -and ($pd.Name.FamilyName.Change -eq "Updated") ) {
             $splatParams['Body'] = [PSCustomObject]@{
                 propertyName = "surName"
-                value        = $($pd.Name.FamilyName.New)
+                value        = $pd.Name.FamilyName.New
             } | ConvertTo-Json
             [void] (Invoke-RestMethod @splatParams)
             $success = $true

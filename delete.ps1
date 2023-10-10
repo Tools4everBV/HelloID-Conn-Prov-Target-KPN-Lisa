@@ -151,7 +151,7 @@ try {
     $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
 
     $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 

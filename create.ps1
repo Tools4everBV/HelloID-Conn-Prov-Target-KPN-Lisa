@@ -139,15 +139,16 @@ $Account = @{
     surName                  = $p.Name.FamilyName
     userPrincipalName        = "$($p.ExternalId).onmicrosoft.com"
     displayName              = $p.DisplayName
-    changePasswordNextSignIn = $false
-    usageLocation            = 'NL'
+    changePasswordNextSignIn = $True
+    usageLocation            = "NL"
+    preferredLanguage        = "nl"
 }
 
 $Success = $False
 
 # Start Script
 try {
-    Write-Verbose 'Getting accessToken'
+    Write-Verbose "Getting accessToken"
 
     $splatGetTokenParams = @{
         TenantId     = $Config.TenantId
@@ -158,19 +159,26 @@ try {
     $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
 
     $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     # Create user
     Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
 
+    $Filter = "EmployeeID+eq+'$($p.ExternalId)'"
+
     $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users?filter=EmployeeID+eq+'$($p.ExternalId)'"
+        Uri     = "$($Config.BaseUrl)/Users?filter=$($Filter)"
         Method  = 'get'
         Headers = $authorizationHeaders
     }
     $userResponse = Invoke-RestMethod @splatParams
+
+    if ($userResponse.count -gt 1) {
+        throw "Multiple accounts found with filter: $($Filter)"
+    }
+
     if ($userResponse.count -eq 0) {
         $splatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
@@ -194,7 +202,7 @@ try {
         $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile  "friendlyDisplayName": "Ontzorgd"
 
         $splatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$aRef/WorkspaceProfiles"
+            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/WorkspaceProfiles"
             Method  = 'PUT'
             Headers = $authorizationHeaders
             body    = ($workSpaceProfileGuid | ConvertTo-Json)
@@ -207,7 +215,7 @@ try {
         Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
 
     }
-    elseif ( $userResponse.count -eq 1) {
+    else {
         $userResponse = $userResponse.value
         $aRef = $($userResponse.id)
 

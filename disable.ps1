@@ -147,13 +147,13 @@ try {
 
     $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
     $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     Write-Verbose "Disable KPN Lisa account for '$($p.DisplayName)'"
     $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$aRef"
+        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
         Method  = 'PATCH'
         Headers = $authorizationHeaders
         Body    = [PSCustomObject]@{

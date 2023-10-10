@@ -154,7 +154,7 @@ try {
     Write-Verbose "Disable KPN Lisa account for '$($p.DisplayName)'"
     $splatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
-        Method  = 'PATCH'
+        Method  = 'Patch'
         Headers = $authorizationHeaders
         Body    = [PSCustomObject]@{
             propertyName = "accountEnabled"

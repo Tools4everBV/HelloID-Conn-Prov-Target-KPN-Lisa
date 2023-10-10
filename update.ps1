@@ -236,7 +236,7 @@ try {
             IsError = $false
         })
 
-    # TODO:: Create smaller dryrun scope
+    # Updating manager
     if ($null -eq $mRef) {
         $splatDeleteManagerParams = @{
             Uri     = "$($Config.BaseUrl)/Users/$($aRef)/manager"
@@ -244,6 +244,7 @@ try {
             Headers = $authorizationHeaders
         }
 
+        # TODO:: validate return value on update and delete for manager
         if (-not($dryRun -eq $true)) {
             [void] (Invoke-RestMethod @splatDeleteManagerParams)
         }
@@ -264,6 +265,7 @@ try {
             Body    = ($mRef | ConvertTo-Json)
         }
 
+        # TODO:: validate return value on update and delete for manager
         if (-not($dryRun -eq $true)) {
             [void] (Invoke-RestMethod @splatUpdateManagerParams)
         }

@@ -348,7 +348,7 @@ $Account = @{
                                )
     accountEnabled           = $False
     mail                     = $userPrincipalName
-    passWord                 = ''
+    password                 = ''
 }
 
 $Success = $False
@@ -403,7 +403,7 @@ try {
         }
 
         $aRef = $($userResponse.objectId)
-        $account.passWord = $($userResponse.temporaryPassword)
+        $account.password = $($userResponse.temporaryPassword)
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
@@ -448,7 +448,7 @@ try {
             body    = ($account | Select-Object -Property * -ExcludeProperty @(
                     'userPrincipalName', 'changePasswordNextSignIn',
                     'accountEnabled', 'preferredLanguage',
-                    'usageLocation', 'mail', 'passWord'
+                    'usageLocation', 'mail', 'password'
                 ) | ConvertTo-Json)
         }
 

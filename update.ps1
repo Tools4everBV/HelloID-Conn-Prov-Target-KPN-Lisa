@@ -67,9 +67,16 @@ function Get-DisplayName {
     )
 
     process {
+        if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
+            $FirstName = $person.Name.GivenName
+        }
+        else {
+            $FirstName = $person.Name.Nickname
+        }
+
         $SurName = Get-SurName -person $person
 
-        return "$($person.name.NickName) $SurName"
+        Write-Output "$($FirstName) $($SurName)"
     }
 }
 
@@ -192,9 +199,7 @@ $Account = @{
     department     = $p.PrimaryContract.Department.DisplayName
     jobTitle       = $p.PrimaryContract.Title.Name
     companyName    = $p.PrimaryContract.Organization.Name
-    businessPhones = @(
-                         $p.Contact.Business.Phone.Mobile
-                     )
+    # businessPhones = @("$($p.Contact.Business.Phone.Mobile)")
 }
 
 $Success = $False
@@ -216,6 +221,14 @@ try {
     $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+
+    #Get previous account, select only $Account.Keys
+    $splatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
+        Method  = 'Get'
+        Headers = $authorizationHeaders
+    }
+    $PreviousAccount = Invoke-RestMethod @splatParams | Select-Object $Account.Keys
 
     Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
 
@@ -300,11 +313,13 @@ $Result = [PSCustomObject]@{
     PreviousAccount  = $PreviousAccount
 
     # Optionally return data for use in other systems
-    # ExportData      = [PSCustomObject]@{
-    #     DisplayName = $Account.DisplayName
-    #     UserName    = $Account.UserName
-    #     ExternalId  = $aRef
-    # }
+    ExportData      = [PSCustomObject]@{
+        AccountReference  = $aRef
+        userPrincipalName = $PreviousAccount.userPrincipalName
+        employeeId        = $Account.employeeId
+        displayName       = $Account.displayName
+        mail              = $PreviousAccount.mail
+    }
 }
 
 Write-Output $Result | ConvertTo-Json -Depth 10

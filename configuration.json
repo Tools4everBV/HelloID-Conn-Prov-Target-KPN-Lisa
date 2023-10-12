@@ -40,5 +40,14 @@
             "placeholder": "https://mwpapi.kpnwerkplek.com/api",
             "required": true
         }
+    },
+    {
+        "key": "Domain",
+        "type": "input",
+        "templateOptions": {
+            "label": "UPN Domain",
+            "placeholder": "domain.com",
+            "required": true
+        }
     }
 ]

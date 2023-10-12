@@ -27,10 +27,6 @@ $AuditLogs = [Collections.Generic.List[PSCustomObject]]::new()
 
 #region functions
 #Primary Email and UPN Generation
-# 1. <First Name>.<Last name prefix><Last Name>@<Domain> (e.g janine.vandenboele@yourdomain.com)
-# 2. <First Name (initial)>.<last name prefix><Last Name>@<Domain> (e.g j.vandenboele@yourdomain.com)
-# 3. <First Name (2 initials)>.<Last name prefix><Last Name><iterator> @<Domain>(e.g ja.vandenboele@yourdomain.com)
-# 4. <First Name>.<Last name prefix><Last Name><iterator> @<Domain>(e.g janine.vandenboele2@yourdomain.com)
 function New-UserPrincipalName {
     [cmdletbinding()]
     Param (
@@ -49,74 +45,82 @@ function New-UserPrincipalName {
 
     Process {
         try {
-            $suffix = "";
+            if ($Iteration -eq 0) {
+                $suffix = ""
+            }
+            else {
+                $suffix = "$($Iteration)"
+            }
 
             #Check Nickname
             if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
-                $tempFirstName = $person.Name.GivenName
+                $FirstName = $person.Name.GivenName
             }
             else {
-                $tempFirstName = $person.Name.Nickname
+                $FirstName = $person.Name.Nickname
             }
 
-            $tempFirstName = $tempFirstName -Replace ' ', ''
-
-
-            switch ($Iteration) {
-                0 {
-                    $tempFirstName = $tempFirstName
-                    Break
-                }
-                1 {
-                    $tempFirstName = $tempFirstName.substring(0, 1)
-                    Break
-                }
-                2 {
-                    $tempFirstName = $tempFirstName.substring(0, 2)
-                    Break
-                }
-                default {
-                    $tempFirstName = $tempFirstName
-                    $suffix = "$($Iteration-1)"
-                }
+            if ($person.name.convention.substring(0,1) -eq "P") {
+                # PartnerName
+                $SurName = "$($person.name.FamilyNamePartnerPrefix) $($person.name.FamilyNamePartner)".Trim()
+            }
+            else {
+                # FamilyName
+                $SurName = "$($person.name.FamilyNamePrefix) $($person.name.FamilyName)".Trim()
             }
 
-            if ($personObj.PrimaryContract.custom.suffix -eq 'impegno.nl') {
-                if ([string]::IsNullOrEmpty($person.Name.Nickname)) { $tempFirstName = $person.Name.GivenName } else { $tempFirstName = $person.Name.Nickname }
-                $tempFirstName = $tempFirstName -Replace ' ', ''
-                switch ($Iteration) {
-                    0 {
-                        $tempFirstName = $tempFirstName.substring(0, 1)
-                        Break
-                    }
-                    1 {
-                        $tempFirstName = $tempFirstName
-                        Break
-                    }
-                    2 {
-                        $tempFirstName = $tempFirstName.substring(0, 2)
-                        Break
-                    }
-                    default {
-                        $tempFirstName = $tempFirstName
-                        $suffix = "$($Iteration-1)"
-                    }
-                }
-            }
+            $result = ("{0}{1}@{2}" -f $FirstName, $SurName, $domain).toLower().replace("'", "").replace("\s", "")
 
-            #if([string]::IsNullOrEmpty($p.Name.FamilyNamePrefix)) { $tempLastNamePrefix = "" } else { $tempLastNamePrefix = $p.Name.FamilyNamePrefix -replace ' ','' }
-            $tempLastName = $person.Custom.KpnLisaUpnMailLastname
-            $tempUsername = $tempFirstName + "." + $tempLastName
-            $tempUsername = $tempUsername.substring(0, [Math]::Min(64 - $suffix.Length, $tempUsername.Length))  #max 64 chars for email address and upn
-            $result = ("{0}{1}@{2}" -f $tempUsername, $suffix, $domain)
-            $result = $result.toLower()
-            $result = $result.replace("'", "")
-            $result = [Text.Encoding]::ASCII.GetString([Text.Encoding]::GetEncoding("Cyrillic").GetBytes($result))
-            return $result
+            Remove-StringLatinCharacters($result)
         }
         catch {
             throw("An error was found in the name convention algorithm: $($_.Exception.Message): $($_.ScriptStackTrace)")
         }
+    }
+}
+
+
+function Find-UserPrincipalName {
+    [cmdletbinding()]
+    Param (
+        [Parameter(Mandatory)]
+        [object]
+        $Person,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Domain,
+
+        [Parameter(Mandatory)]
+        [Object]
+        $Headers
+    )
+
+    Process {
+        $Unique = $False
+        $Iteration = 0
+
+        while ($Unique -eq $False) {
+            $userPrincipalName = New-UserPrincipalName -person $Person -domain $Domain -Iteration $Iteration
+
+            $splatParams = @{
+                Uri     = "$($config.BaseUrl)/Users?filter=startswith(userPrincipalName,'$userPrincipalName')"
+                Method  = 'get'
+                Headers = $Headers
+            }
+            $userResponse = Invoke-RestMethod @splatParams
+
+            if ($userResponse.count -eq 0) {
+                Write-Verbose -Verbose "$userPrincipalName is uniek"
+                $unique = $true
+            }
+            else {
+                Write-Verbose -Verbose "$userPrincipalName is niet uniek"
+                $iteration++
+            }
+        }
+
+        Write-Output $userPrincipalName
     }
 }
 
@@ -136,13 +140,13 @@ function Get-SurName {
         switch ($person.name.convention) {
             'B' {
                 return $FamilyName
-             }
+            }
             'P' {
                 return $PartnerName
-             }
+            }
             'BP' {
                 return "$($FamilyName) - $($PartnerName)"
-             }
+            }
             'PB' {
                 return "$($PartnerName) - $($FamilyName)"
             }
@@ -160,9 +164,16 @@ function Get-DisplayName {
     )
 
     process {
+        if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
+            $FirstName = $person.Name.GivenName
+        }
+        else {
+            $FirstName = $person.Name.Nickname
+        }
+
         $SurName = Get-SurName -person $person
 
-        return "$($person.name.NickName) $SurName"
+        Write-Output "$($FirstName) $($SurName)"
     }
 }
 
@@ -290,49 +301,12 @@ function Get-ErrorMessage {
 }
 #endregion functions
 
-Write-Verbose 'Getting accessToken'
-$splatGetTokenParams = @{
-    TenantId     = $config.TenantId
-    ClientId     = $config.ClientId
-    ClientSecret = $config.ClientSecret
-    Scope        = $config.Scope
-}
-$accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-$authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-$authorizationHeaders.Add("Authorization", "Bearer $accessToken")
-$authorizationHeaders.Add("Content-Type", "application/json")
-$authorizationHeaders.Add("Mwp-Api-Version", "1.0")
-
-# Mapping
-$unique = $false
-$Iteration = 0
-$Domain =  $personObj.PrimaryContract.Custom.Suffix
-
-while ($unique -eq $false) {
-    $userPrincipalName = New-UserPrincipalName -person $p -domain $Domain -Iteration $Iteration
-
-    $splatParams = @{
-        Uri     = "$($config.BaseUrl)/Users?filter=startswith(userPrincipalName,'$userPrincipalName')"
-        Method  = 'get'
-        Headers = $authorizationHeaders
-    }
-    $userResponse = Invoke-RestMethod @splatParams
-
-    if ($userResponse.count -eq 0) {
-        Write-Verbose -Verbose "$userPrincipalName is uniek"
-        $unique = $true
-    }
-    else {
-        Write-Verbose -Verbose "$userPrincipalName is niet uniek"
-        $iteration++
-    }
-}
 
 # Build the Final Account object
 $Account = @{
     givenName                = $p.Name.NickName
     surName                  = Get-SurName $p
-    userPrincipalName        = $userPrincipalName
+    userPrincipalName        = $null # set to null to let the script render a upn based on the Find-UserPrincipalName function
     displayName              = Get-DisplayName $p
     changePasswordNextSignIn = $True
     usageLocation            = "NL"
@@ -343,11 +317,8 @@ $Account = @{
     department               = $p.PrimaryContract.Department.DisplayName
     jobTitle                 = $p.PrimaryContract.Title.Name
     companyName              = $p.PrimaryContract.Organization.Name
-    businessPhones           = @(
-                                   $p.Contact.Business.Phone.Mobile
-                               )
-    accountEnabled           = $False
-    mail                     = $userPrincipalName
+    businessPhones           = @("$($p.Contact.Business.Phone.Mobile)")
+    mail                     = $null # set to null to match to userPrincipalName, force string to leave empty
     password                 = ''
 }
 
@@ -355,29 +326,27 @@ $Success = $False
 
 # Start Script
 try {
-    # Write-Verbose "Getting accessToken"
+    Write-Verbose "Getting accessToken"
 
-    # $splatGetTokenParams = @{
-    #     TenantId     = $Config.TenantId
-    #     ClientId     = $Config.ClientId
-    #     ClientSecret = $Config.ClientSecret
-    #     Scope        = $Config.Scope
-    # }
-    # $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+    $splatGetTokenParams = @{
+        TenantId     = $Config.TenantId
+        ClientId     = $Config.ClientId
+        ClientSecret = $Config.ClientSecret
+        Scope        = $Config.Scope
+    }
+    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
 
-    # $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    # $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
-    # $authorizationHeaders.Add("Content-Type", "application/json")
-    # $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
+    $authorizationHeaders.Add("Content-Type", "application/json")
+    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     # Create user
-    Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
-
     $Filter = "EmployeeID+eq+'$($p.ExternalId)'"
 
     $splatParams = @{
         Uri     = "$($Config.BaseUrl)/Users?filter=$($Filter)"
-        Method  = 'get'
+        Method  = 'Get'
         Headers = $authorizationHeaders
     }
     $userResponse = Invoke-RestMethod @splatParams
@@ -386,81 +355,68 @@ try {
         throw "Multiple accounts found with filter: $($Filter)"
     }
 
+    # Create KPN Lisa Account
     if ($userResponse.count -eq 0) {
+
+        Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
+
+        # if there is no UPN, we will render it
+        if ($null -eq $Account.userPrincipalName) {
+            $Account.userPrincipalName = Find-UserPrincipalName -Person $p -Domain $Config.Domain -Headers $authorizationHeaders
+        }
+
+        if ($Account.ContainsKey("mail") -and $null -eq $Account.mail) {
+            $Account.mail = $Account.userPrincipalName
+        }
+
+        $Body = $Account | Select-Object @(
+            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
+            'givenName', 'surName', 'displayName', 'userPrincipalName'
+        )
+
         $splatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
-            Method  = 'POST'
-            Body    = ($account | Select-Object @(
-                    'givenName', 'surName', 'userPrincipalName',
-                    'displayName','changePasswordNextSignIn',
-                    'usageLocation', 'preferredLanguage'
-            ) | ConvertTo-Json)
+            Method  = 'Post'
+            Body    = $Body | ConvertTo-Json
             Headers = $authorizationHeaders
         }
 
         if (-not($dryRun -eq $true)) {
             $userResponse = Invoke-RestMethod @splatParams
+
+            $aRef = $($userResponse.objectId)
+            $account.password = $($userResponse.temporaryPassword)
+        }
+        else {
+            write-verbose -verbose $splatParams.body
+
+            $aRef = 'FakeRef'
+            $account.password = "FakePassword"
         }
 
-        $aRef = $($userResponse.objectId)
-        $account.password = $($userResponse.temporaryPassword)
+        #Update the user with all other props
+        $Body = $Account | Select-Object -Property *, 'accountEnabled' -ExcludeProperty @(
+            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
+            'givenName', 'surName', 'displayName', 'userPrincipalName',
+            'password'
+        )
 
-        $AuditLogs.Add([PSCustomObject]@{
-                Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($p.DisplayName)'. Id: $($aRef)"
-                IsError = $False
-            })
-
-        #Set Default WorkSpaceProfile
-        $workSpaceProfileGuid = "500708ea-b69f-4f6c-83fc-dd5f382c308b" #WorkspaceProfile  "friendlyDisplayName": "Ontzorgd"
-
-        $splatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/WorkspaceProfiles"
-            Method  = 'PUT'
-            Headers = $authorizationHeaders
-            body    = ($workSpaceProfileGuid | ConvertTo-Json)
-        }
-
-        if (-not($dryRun -eq $true)) {
-            [void] (Invoke-RestMethod @splatParams) #If 200 it returns a Empty String
-        }
-
-        Write-Verbose "Added Workspace profile [Ontzorgd]" -Verbose
-
-    }
-    else {
-        $userResponse = $userResponse.value
-        $aRef = $($userResponse.id)
-
-        $AuditLogs.Add([PSCustomObject]@{
-                Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Correlated to account with id $($aRef)"
-                IsError = $False
-            })
-    }
-
-    if ($userResponse) {
+        # Force the account disabled
+        $body.accountEnabled = $False
 
         $splatParams = @{
             Uri     = "$($config.BaseUrl)/Users/$($aRef)/bulk"
             Method  = 'Patch'
             Headers = $authorizationHeaders
-            body    = ($account | Select-Object -Property * -ExcludeProperty @(
-                    'userPrincipalName', 'changePasswordNextSignIn',
-                    'accountEnabled', 'preferredLanguage',
-                    'usageLocation', 'mail', 'password'
-                ) | ConvertTo-Json)
+            Body    = $Body | ConvertTo-Json
         }
 
         if (-not($dryRun -eq $true)) {
             [void] (Invoke-RestMethod @splatParams)
         }
-
-        $AuditLogs.Add([PSCustomObject]@{
-                Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Updated account for '$($personObj.DisplayName)'. Id: $($aRef)"
-                IsError = $False
-            })
+        else {
+            write-verbose -verbose $splatParams.Body
+        }
 
         # Set the manager
         if ($mRef) {
@@ -477,6 +433,72 @@ try {
 
             Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
         }
+
+        $Success = $true
+
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "CreateAccount" # Optionally specify a different action for this audit log
+                Message = "Created account for '$($p.DisplayName)'. Id: $($aRef)"
+                IsError = $False
+            })
+
+    }
+    # Correlate KPN Lisa Account
+    else {
+
+        Write-Verbose "Correlating KPN Lisa account for '$($p.DisplayName)'"
+
+        $userResponse = $userResponse.value
+        $aRef = $userResponse.id
+
+        #region removable when the correlated flag is available
+
+        $Account.userPrincipalName = $userResponse.userPrincipalName
+
+        if ($Account.ContainsKey("mail")) {
+            $Account.mail = $userResponse.mail
+        }
+
+        $Body = $Account | Select-Object -Property * -ExcludeProperty @(
+            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
+            'userPrincipalName', 'password', 'accountEnabled', 'mail'
+        )
+        $splatParams = @{
+            Uri     = "$($config.BaseUrl)/Users/$($aRef)/bulk"
+            Method  = 'Patch'
+            Headers = $authorizationHeaders
+            body    =$Body | ConvertTo-Json
+        }
+
+        if (-not($dryRun -eq $true)) {
+            [void] (Invoke-RestMethod @splatParams)
+        }
+        else {
+            Write-verbose -verbose $splatParams.Body
+        }
+
+        # Set the manager
+        if ($mRef) {
+            $splatParams = @{
+                Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
+                Method  = 'Put'
+                Body    = ($mRef | ConvertTo-Json)
+                Headers = $authorizationHeaders
+            }
+
+            if (-not($dryRun -eq $true)) {
+                [void] (Invoke-RestMethod @splatParams)
+            }
+
+            Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
+        }
+        #endregion
+
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+                Message = "Updated account for '$($p.DisplayName)'. Id: $($aRef)"
+                IsError = $False
+            })
         $Success = $true
     }
 }
@@ -501,11 +523,13 @@ $result = [PSCustomObject]@{
     Account          = $account
 
     # Optionally return data for use in other systems
-    # ExportData = [PSCustomObject]@{
-    #     DisplayName = $Account.DisplayName
-    #     UserName    = $Account.UserName
-    #     ExternalId  = $aRef
-    # }
+    ExportData      = [PSCustomObject]@{
+        AccountReference  = $aRef
+        userPrincipalName = $Account.userPrincipalName
+        employeeId        = $Account.employeeId
+        displayName       = $Account.displayName
+        mail              = $Account.mail
+    }
 }
 
 Write-Output $result | ConvertTo-Json -Depth 10

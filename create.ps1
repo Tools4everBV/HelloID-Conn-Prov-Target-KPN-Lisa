@@ -4,196 +4,7 @@
 # Version: 1.0.0.0
 #####################################################
 
-#region Config
-$Config = $Configuration | ConvertFrom-Json
-#endregion Config
-
-#region default properties
-$p = $Person | ConvertFrom-Json
-$m = $Manager | ConvertFrom-Json
-
-$aRef = $null # New-Guid
-$mRef = $managerAccountReference | ConvertFrom-Json
-
-$AuditLogs = [Collections.Generic.List[PSCustomObject]]::new()
-#endregion default properties
-
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
-
 #region functions
-#Primary Email and UPN Generation
-function New-UserPrincipalName {
-    [cmdletbinding()]
-    Param (
-        [Parameter(Mandatory)]
-        [object]
-        $person,
-
-        [Parameter(Mandatory)]
-        [string]
-        $domain,
-
-        [Parameter(Mandatory)]
-        [int]
-        $Iteration
-    )
-
-    Process {
-        try {
-            if ($Iteration -eq 0) {
-                $suffix = ""
-            }
-            else {
-                $suffix = "$($Iteration)"
-            }
-
-            #Check Nickname
-            if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
-                $FirstName = $person.Name.GivenName
-            }
-            else {
-                $FirstName = $person.Name.Nickname
-            }
-
-            if ($person.name.convention.substring(0,1) -eq "P") {
-                # PartnerName
-                $SurName = "$($person.name.FamilyNamePartnerPrefix) $($person.name.FamilyNamePartner)".Trim()
-            }
-            else {
-                # FamilyName
-                $SurName = "$($person.name.FamilyNamePrefix) $($person.name.FamilyName)".Trim()
-            }
-
-            $result = ("{0}{1}@{2}" -f $FirstName, $SurName, $domain).toLower().replace("'", "").replace("\s", "")
-
-            Remove-StringLatinCharacters($result)
-        }
-        catch {
-            throw("An error was found in the name convention algorithm: $($_.Exception.Message): $($_.ScriptStackTrace)")
-        }
-    }
-}
-
-
-function Find-UserPrincipalName {
-    [cmdletbinding()]
-    Param (
-        [Parameter(Mandatory)]
-        [object]
-        $Person,
-
-        [Parameter(Mandatory)]
-        [string]
-        $Domain,
-
-        [Parameter(Mandatory)]
-        [Object]
-        $Headers
-    )
-
-    Process {
-        $Unique = $False
-        $Iteration = 0
-
-        while ($Unique -eq $False) {
-            $userPrincipalName = New-UserPrincipalName -person $Person -domain $Domain -Iteration $Iteration
-
-            $splatParams = @{
-                Uri     = "$($config.BaseUrl)/Users?filter=startswith(userPrincipalName,'$userPrincipalName')"
-                Method  = 'get'
-                Headers = $Headers
-            }
-            $userResponse = Invoke-RestMethod @splatParams
-
-            if ($userResponse.count -eq 0) {
-                Write-Verbose -Verbose "$userPrincipalName is uniek"
-                $unique = $true
-            }
-            else {
-                Write-Verbose -Verbose "$userPrincipalName is niet uniek"
-                $iteration++
-            }
-        }
-
-        Write-Output $userPrincipalName
-    }
-}
-
-
-function Get-SurName {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory)]
-        [object]
-        $person
-    )
-
-    process {
-        $FamilyName = "$($person.name.FamilyNamePrefix) $($person.name.FamilyName)".Trim()
-        $PartnerName = "$($person.name.FamilyNamePartnerPrefix) $($person.name.FamilyNamePartner)".Trim()
-
-        switch ($person.name.convention) {
-            'B' {
-                return $FamilyName
-            }
-            'P' {
-                return $PartnerName
-            }
-            'BP' {
-                return "$($FamilyName) - $($PartnerName)"
-            }
-            'PB' {
-                return "$($PartnerName) - $($FamilyName)"
-            }
-        }
-    }
-}
-
-
-function Get-DisplayName {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory)]
-        [object]
-        $person
-    )
-
-    process {
-        if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
-            $FirstName = $person.Name.GivenName
-        }
-        else {
-            $FirstName = $person.Name.Nickname
-        }
-
-        $SurName = Get-SurName -person $person
-
-        Write-Output "$($FirstName) $($SurName)"
-    }
-}
-
-
-function Remove-StringLatinCharacters {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory)]
-        [string]
-        $String
-    )
-
-    process {
-        [Text.Encoding]::ASCII.GetString(
-            [Text.Encoding]::GetEncoding("Cyrillic").GetBytes($String)
-        )
-    }
-}
-
-
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -226,7 +37,9 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @RestMethod
+
+        Write-Output $Response.access_token
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
@@ -302,70 +115,92 @@ function Get-ErrorMessage {
 #endregion functions
 
 
-# Build the Final Account object
-$Account = @{
-    givenName                = $p.Name.NickName
-    surName                  = Get-SurName $p
-    userPrincipalName        = $null # set to null to let the script render a upn based on the Find-UserPrincipalName function
-    displayName              = Get-DisplayName $p
-    changePasswordNextSignIn = $True
-    usageLocation            = "NL"
-    preferredLanguage        = "nl"
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
 
-    employeeId               = $p.ExternalId
-    officeLocation           = $p.PrimaryContract.Department.DisplayName
-    department               = $p.PrimaryContract.Department.DisplayName
-    jobTitle                 = $p.PrimaryContract.Title.Name
-    companyName              = $p.PrimaryContract.Organization.Name
-    businessPhones           = @("$($p.Contact.Business.Phone.Mobile)")
-    mail                     = $null # set to null to match to userPrincipalName, force string to leave empty
-    password                 = ''
-}
+#region Aliasses
+$Config = $actionContext.Configuration
+$Account = $outputContext.Data
+$AuditLogs = $outputContext.AuditLogs
 
-$Success = $False
+$p = $PersonContext.Person
+$m = $PersonContext.Manager
+#endregion Aliasses
+
 
 # Start Script
 try {
-    Write-Verbose "Getting accessToken"
+    Write-Verbose -Verbose "Getting accessToken"
 
-    $splatGetTokenParams = @{
+    $SplatParams = @{
         TenantId     = $Config.TenantId
         ClientId     = $Config.ClientId
         ClientSecret = $Config.ClientSecret
         Scope        = $Config.Scope
     }
-    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+    $accessToken = Get-LisaAccessToken @SplatParams
 
     $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-    # Create user
-    $Filter = "EmployeeID+eq+'$($p.ExternalId)'"
+    #region Correlation
+    if ($actionContext.CorrelationConfiguration.Enabled) {
+        $correlationField = $actionContext.CorrelationConfiguration.accountField
+        $correlationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
 
-    $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users?filter=$($Filter)"
-        Method  = 'Get'
-        Headers = $authorizationHeaders
-    }
-    $userResponse = Invoke-RestMethod @splatParams
-
-    if ($userResponse.count -gt 1) {
-        throw "Multiple accounts found with filter: $($Filter)"
-    }
-
-    # Create KPN Lisa Account
-    if ($userResponse.count -eq 0) {
-
-        Write-Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
-
-        # if there is no UPN, we will render it
-        if ($null -eq $Account.userPrincipalName) {
-            $Account.userPrincipalName = Find-UserPrincipalName -Person $p -Domain $Config.Domain -Headers $authorizationHeaders
+        if ($null -eq $correlationField -or $null -eq $correlationValue) {
+            Write-Warning "Correlation is enabled but not configured correctly."
         }
 
-        if ($Account.ContainsKey("mail") -and $null -eq $Account.mail) {
+        #  Write logic here that checks if the account can be correlated in the target system
+        $Filter = "$($correlationField)+eq+'$($correlationValue)'"
+
+        $SplatParams = @{
+            Uri     = "$($Config.BaseUrl)/Users?filter=$($Filter)"
+            Method  = 'Get'
+            Headers = $authorizationHeaders
+        }
+        $correlatedAccount = Invoke-RestMethod @SplatParams
+
+        if ($correlatedAccount.count -gt 1) {
+            throw "Multiple accounts found with filter: $($Filter)"
+        }
+
+        if ($correlatedAccount.count -eq 1) {
+            $correlatedAccount = $correlatedAccount.value
+
+            $outputContext.AccountReference = $correlatedAccount.id
+
+            $Account.PSObject.Properties | ForEach-Object {
+                if ($correlatedAccount.PSobject.Properties.Name.Contains($_.Name)) {
+                    $Account.$($_.Name) = $correlatedAccount.$($_.Name)
+                }
+            }
+
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "CorrelateAccount" # Optionally specify a different action for this audit log
+                    Message = "Correlated account with username $($correlatedAccount.UserName) on field $($correlationField) with value $($correlationValue)"
+                    IsError = $false
+                })
+
+            $outputContext.Success = $True
+            $outputContext.AccountCorrelated = $True
+        }
+    }
+    #endregion correlation
+
+    # Create KPN Lisa Account
+    if (-Not $outputContext.AccountCorrelated) {
+
+        Write-Verbose -Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
+
+        if ($Account.PSobject.Properties.Name.Contains("mail") -and $null -eq $Account.mail) {
             $Account.mail = $Account.userPrincipalName
         }
 
@@ -374,24 +209,23 @@ try {
             'givenName', 'surName', 'displayName', 'userPrincipalName'
         )
 
-        $splatParams = @{
+        $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
             Method  = 'Post'
             Body    = $Body | ConvertTo-Json
             Headers = $authorizationHeaders
         }
 
-        if (-not($dryRun -eq $true)) {
-            $userResponse = Invoke-RestMethod @splatParams
+        if (-not($actionContext.DryRun -eq $true)) {
+            $userResponse = Invoke-RestMethod @SplatParams
 
-            $aRef = $($userResponse.objectId)
-            $account.password = $($userResponse.temporaryPassword)
+            $outputContext.AccountReference = $userResponse.objectId
+            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $userResponse.temporaryPassword
         }
         else {
-            write-verbose -verbose $splatParams.body
+            Write-Verbose -Verbose $SplatParams.body
 
-            $aRef = 'FakeRef'
-            $account.password = "FakePassword"
+            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue "FakePassword"
         }
 
         #Update the user with all other props
@@ -404,132 +238,54 @@ try {
         # Force the account disabled
         $body.accountEnabled = $False
 
-        $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$($aRef)/bulk"
+        $SplatParams = @{
+            Uri     = "$($config.BaseUrl)/Users/$($outputContext.AccountReference)/bulk"
             Method  = 'Patch'
             Headers = $authorizationHeaders
             Body    = $Body | ConvertTo-Json
         }
 
-        if (-not($dryRun -eq $true)) {
-            [void] (Invoke-RestMethod @splatParams)
+        if (-not($actionContext.DryRun -eq $true)) {
+            [void] (Invoke-RestMethod @SplatParams)
         }
         else {
-            write-verbose -verbose $splatParams.Body
+            Write-Verbose -Verbose $SplatParams.Body
         }
 
         # Set the manager
-        if ($mRef) {
-            $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
+        if ($PersonContext.References.ManagerAccount) {
+            $SplatParams = @{
+                Uri     = "$($Config.BaseUrl)/Users/$($outputContext.AccountReference)/Manager"
                 Method  = 'Put'
-                Body    = ($mRef | ConvertTo-Json)
+                Body    = ($PersonContext.References.ManagerAccount | ConvertTo-Json)
                 Headers = $authorizationHeaders
             }
 
-            if (-not($dryRun -eq $true)) {
-                [void] (Invoke-RestMethod @splatParams)
+            if (-not($actionContext.DryRun -eq $true)) {
+                [void] (Invoke-RestMethod @SplatParams)
             }
 
-            Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
+            Write-Verbose -Verbose "Added Manager $($m.displayName) to '$($p.DisplayName)'"
         }
-
-        $Success = $true
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($p.DisplayName)'. Id: $($aRef)"
+                Message = "Created account for '$($p.DisplayName)'. Id: $($outputContext.AccountReference)"
                 IsError = $False
             })
 
-    }
-    # Correlate KPN Lisa Account
-    else {
-
-        Write-Verbose "Correlating KPN Lisa account for '$($p.DisplayName)'"
-
-        $userResponse = $userResponse.value
-        $aRef = $userResponse.id
-
-        #region removable when the correlated flag is available
-
-        $Account.userPrincipalName = $userResponse.userPrincipalName
-
-        if ($Account.ContainsKey("mail")) {
-            $Account.mail = $userResponse.mail
-        }
-
-        $Body = $Account | Select-Object -Property * -ExcludeProperty @(
-            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
-            'userPrincipalName', 'password', 'accountEnabled', 'mail'
-        )
-        $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$($aRef)/bulk"
-            Method  = 'Patch'
-            Headers = $authorizationHeaders
-            body    =$Body | ConvertTo-Json
-        }
-
-        if (-not($dryRun -eq $true)) {
-            [void] (Invoke-RestMethod @splatParams)
-        }
-        else {
-            Write-verbose -verbose $splatParams.Body
-        }
-
-        # Set the manager
-        if ($mRef) {
-            $splatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
-                Method  = 'Put'
-                Body    = ($mRef | ConvertTo-Json)
-                Headers = $authorizationHeaders
-            }
-
-            if (-not($dryRun -eq $true)) {
-                [void] (Invoke-RestMethod @splatParams)
-            }
-
-            Write-Verbose "Added Manager $($managerResponse.Value.displayName) to '$($p.DisplayName)'" -Verbose
-        }
-        #endregion
-
-        $AuditLogs.Add([PSCustomObject]@{
-                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Updated account for '$($p.DisplayName)'. Id: $($aRef)"
-                IsError = $False
-            })
-        $Success = $true
+        $outputContext.Success = $True
     }
 }
 catch {
     $ex = $PSItem
     $errorMessage = Get-ErrorMessage -ErrorObject $ex
 
-    Write-Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($errorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
+    Write-Verbose -Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($errorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
 
     $auditLogs.Add([PSCustomObject]@{
             Action  = "CreateAccount" # Optionally specify a different action for this audit log
-            Message = "Error creating account [$($account.DisplayName)]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error creating account [$($p.DisplayName)]. Error Message: $($errorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }
-
-
-$result = [PSCustomObject]@{
-    Success          = $Success
-    AccountReference = $aRef
-    AuditLogs        = $AuditLogs
-    Account          = $account
-
-    # Optionally return data for use in other systems
-    ExportData      = [PSCustomObject]@{
-        AccountReference  = $aRef
-        userPrincipalName = $Account.userPrincipalName
-        employeeId        = $Account.employeeId
-        displayName       = $Account.displayName
-        mail              = $Account.mail
-    }
-}
-
-Write-Output $result | ConvertTo-Json -Depth 10

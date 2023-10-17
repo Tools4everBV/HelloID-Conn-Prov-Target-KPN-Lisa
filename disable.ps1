@@ -4,27 +4,6 @@
 # Version: 1.0.0.0
 #####################################################
 
-#region Config
-$Config = $Configuration | ConvertFrom-Json
-#endregion Config
-
-#region default properties
-$p = $person | ConvertFrom-Json
-$m = $manager | ConvertFrom-Json
-
-$aRef = $accountReference | ConvertFrom-Json
-$mRef = $managerAccountReference | ConvertFrom-Json
-
-$AuditLogs = [Collections.Generic.List[PSCustomObject]]::new()
-#endregion default properties
-
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
-
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -58,7 +37,9 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @RestMethod
+
+        Write-Output $Response.access_token
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
@@ -133,46 +114,61 @@ function Get-ErrorMessage {
 }
 #endregion functions
 
-$Success = $False
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
+
+#region Aliasses
+$Config = $actionContext.Configuration
+$Account = $outputContext.Data
+$AuditLogs = $outputContext.AuditLogs
+
+$Person = $PersonContext.Person
+$Manager = $PersonContext.Manager
+#endregion Aliasses
 
 # Start Script
 try {
     Write-Verbose 'Getting accessToken'
-    $splatGetTokenParams = @{
+
+    $SplatParams = @{
         TenantId     = $Config.TenantId
         ClientId     = $Config.ClientId
         ClientSecret = $Config.ClientSecret
         Scope        = $Config.Scope
     }
+    $accessToken = Get-LisaAccessToken @SplatParams
 
-    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-    Write-Verbose "Disable KPN Lisa account for '$($p.DisplayName)'"
-    $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
-        Method  = 'Patch'
+    Write-Verbose "Disable KPN Lisa account for '$($Person.DisplayName)'"
+    $SplatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($personContext.References.Account)"
         Headers = $authorizationHeaders
-        Body    = [PSCustomObject]@{
+        Method  = 'Patch'
+        Body    = @{
             propertyName = "accountEnabled"
-            value        = $false
-        } | ConvertTo-Json
+            value        = $False
+        }
     }
 
     if (-not($dryRun -eq $true)) {
-        [void] (Invoke-RestMethod @splatParams)
+        [void] (Invoke-RestMethod @SplatParams)
     }
-
-    $success = $true
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount"
-            Message = "Account for '$($p.DisplayName)' is disabled"
+            Message = "Account for '$($Person.DisplayName)' is disabled"
             IsError = $False
         })
+
+    $outputContext.Success = $True
 }
 catch {
     $ex = $PSItem
@@ -182,15 +178,7 @@ catch {
 
     $auditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount" # Optionally specify a different action for this audit log
-            Message = "Error disabling account [$($account.DisplayName) ($($aRef))]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error disabling account [$($Person.DisplayName) ($($personContext.References.Account))]. Error Message: $($errorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }
-
-$result = [PSCustomObject]@{
-    Success   = $success
-    AuditLogs = $AuditLogs
-    Account   = $account
-}
-
-Write-Output $result | ConvertTo-Json -Depth 10

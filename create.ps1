@@ -114,7 +114,6 @@ function Get-ErrorMessage {
 }
 #endregion functions
 
-
 # Set TLS to accept TLS, TLS 1.1 and TLS 1.2
 [Net.ServicePointManager]::SecurityProtocol = @(
     [Net.SecurityProtocolType]::Tls
@@ -127,13 +126,14 @@ $Config = $actionContext.Configuration
 $Account = $outputContext.Data
 $AuditLogs = $outputContext.AuditLogs
 
-$p = $PersonContext.Person
-$m = $PersonContext.Manager
+$Person = $PersonContext.Person
+$Manager = $PersonContext.Manager
 #endregion Aliasses
-
 
 # Start Script
 try {
+    # TODO:: stukje beunen voor required fields, met harde error als hier niet aan voldaan wordt
+
     Write-Verbose -Verbose "Getting accessToken"
 
     $SplatParams = @{
@@ -159,17 +159,18 @@ try {
         }
 
         #  Write logic here that checks if the account can be correlated in the target system
-        $Filter = "$($correlationField)+eq+'$($correlationValue)'"
-
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users?filter=$($Filter)"
-            Method  = 'Get'
+            Uri     = "$($Config.BaseUrl)/Users"
             Headers = $authorizationHeaders
+            Method  = 'Get'
+            Body    = @{
+                filter = "$($correlationField)+eq+'$($correlationValue)'"
+            }
         }
         $correlatedAccount = Invoke-RestMethod @SplatParams
 
         if ($correlatedAccount.count -gt 1) {
-            throw "Multiple accounts found with filter: $($Filter)"
+            throw "Multiple accounts found with filter: $($SplatParams.Body.filter)"
         }
 
         if ($correlatedAccount.count -eq 1) {
@@ -186,7 +187,7 @@ try {
             $AuditLogs.Add([PSCustomObject]@{
                     Action  = "CorrelateAccount" # Optionally specify a different action for this audit log
                     Message = "Correlated account with username $($correlatedAccount.UserName) on field $($correlationField) with value $($correlationValue)"
-                    IsError = $false
+                    IsError = $False
                 })
 
             $outputContext.Success = $True
@@ -198,7 +199,7 @@ try {
     # Create KPN Lisa Account
     if (-Not $outputContext.AccountCorrelated) {
 
-        Write-Verbose -Verbose "Creating KPN Lisa account for '$($p.DisplayName)'"
+        Write-Verbose -Verbose "Creating KPN Lisa account for '$($Person.DisplayName)'"
 
         if ($Account.PSobject.Properties.Name.Contains("mail") -and $null -eq $Account.mail) {
             $Account.mail = $Account.userPrincipalName
@@ -211,19 +212,21 @@ try {
 
         $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
+            Headers = $authorizationHeaders
             Method  = 'Post'
             Body    = $Body | ConvertTo-Json
-            Headers = $authorizationHeaders
         }
 
-        if (-not($actionContext.DryRun -eq $true)) {
+        if (-Not ($actionContext.DryRun -eq $True)) {
             $userResponse = Invoke-RestMethod @SplatParams
 
             $outputContext.AccountReference = $userResponse.objectId
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $userResponse.temporaryPassword
         }
         else {
-            Write-Verbose -Verbose $SplatParams.body
+            Write-Verbose -Verbose (
+                $SplatParams.Body
+            )
 
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue "FakePassword"
         }
@@ -240,37 +243,39 @@ try {
 
         $SplatParams = @{
             Uri     = "$($config.BaseUrl)/Users/$($outputContext.AccountReference)/bulk"
-            Method  = 'Patch'
             Headers = $authorizationHeaders
+            Method  = 'Patch'
             Body    = $Body | ConvertTo-Json
         }
 
-        if (-not($actionContext.DryRun -eq $true)) {
+        if (-not($actionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @SplatParams)
         }
         else {
-            Write-Verbose -Verbose $SplatParams.Body
+            Write-Verbose -Verbose (
+                $SplatParams.Body
+            )
         }
 
         # Set the manager
         if ($PersonContext.References.ManagerAccount) {
             $SplatParams = @{
                 Uri     = "$($Config.BaseUrl)/Users/$($outputContext.AccountReference)/Manager"
-                Method  = 'Put'
-                Body    = ($PersonContext.References.ManagerAccount | ConvertTo-Json)
                 Headers = $authorizationHeaders
+                Method  = 'Put'
+                Body    = $PersonContext.References.ManagerAccount
             }
 
-            if (-not($actionContext.DryRun -eq $true)) {
+            if (-not($actionContext.DryRun -eq $True)) {
                 [void] (Invoke-RestMethod @SplatParams)
             }
 
-            Write-Verbose -Verbose "Added Manager $($m.displayName) to '$($p.DisplayName)'"
+            Write-Verbose -Verbose "Added Manager $($Manager.displayName) to '$($Person.DisplayName)'"
         }
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($p.DisplayName)'. Id: $($outputContext.AccountReference)"
+                Message = "Created account for '$($Person.DisplayName)'. Id: $($outputContext.AccountReference)"
                 IsError = $False
             })
 
@@ -285,7 +290,7 @@ catch {
 
     $auditLogs.Add([PSCustomObject]@{
             Action  = "CreateAccount" # Optionally specify a different action for this audit log
-            Message = "Error creating account [$($p.DisplayName)]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error creating account [$($Person.DisplayName)]. Error Message: $($errorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }

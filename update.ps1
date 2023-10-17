@@ -4,83 +4,7 @@
 # Version: 1.0.0.0
 #####################################################
 
-#region Config
-$Config = $Configuration | ConvertFrom-Json
-#endregion Config
-
-#region default properties
-$p = $person | ConvertFrom-Json
-$m = $manager | ConvertFrom-Json
-$pp = $previousPerson | ConvertFrom-Json
-$pd = $personDifferences | ConvertFrom-Json
-
-$aRef = $accountReference | ConvertFrom-Json
-$mRef = $managerAccountReference | ConvertFrom-Json
-
-$auditLogs = [Collections.Generic.List[PSCustomObject]]::new()
-#endregion default properties
-
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
-
 #region functions
-function Get-SurName {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory)]
-        [object]
-        $person
-    )
-
-    process {
-        $FamilyName = "$($person.name.FamilyNamePrefix) $($person.name.FamilyName)".Trim()
-        $PartnerName = "$($person.name.FamilyNamePartnerPrefix) $($person.name.FamilyNamePartner)".Trim()
-
-        switch ($person.name.convention) {
-            'B' {
-                return $FamilyName
-            }
-            'P' {
-                return $PartnerName
-            }
-            'BP' {
-                return "$($FamilyName) - $($PartnerName)"
-            }
-            'PB' {
-                return "$($PartnerName) - $($FamilyName)"
-            }
-        }
-    }
-}
-
-
-function Get-DisplayName {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory)]
-        [object]
-        $person
-    )
-
-    process {
-        if ([string]::IsNullOrEmpty($person.Name.Nickname)) {
-            $FirstName = $person.Name.GivenName
-        }
-        else {
-            $FirstName = $person.Name.Nickname
-        }
-
-        $SurName = Get-SurName -person $person
-
-        Write-Output "$($FirstName) $($SurName)"
-    }
-}
-
-
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -113,7 +37,9 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @RestMethod
+
+        Write-Output $Response.access_token
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
@@ -188,71 +114,70 @@ function Get-ErrorMessage {
 }
 #endregion functions
 
-# Build the Final Account object
-$Account = @{
-    givenName      = $p.Name.NickName
-    surName        = Get-SurName $p
-    displayName    = Get-DisplayName $p
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
 
-    employeeId     = $p.ExternalId
-    officeLocation = $p.PrimaryContract.Department.DisplayName
-    department     = $p.PrimaryContract.Department.DisplayName
-    jobTitle       = $p.PrimaryContract.Title.Name
-    companyName    = $p.PrimaryContract.Organization.Name
-    # businessPhones = @("$($p.Contact.Business.Phone.Mobile)")
-}
+#region Aliasses
+$Config = $actionContext.Configuration
+$Account = $outputContext.Data
+$AuditLogs = $outputContext.AuditLogs
 
-$Success = $False
+$Person = $PersonContext.Person
+$Manager = $PersonContext.Manager
+#endregion Aliasses
 
 # Start Script
 try {
     Write-Verbose 'Getting accessToken'
 
-    $splatGetTokenParams = @{
+    $SplatParams = @{
         TenantId     = $Config.TenantId
         ClientId     = $Config.ClientId
         ClientSecret = $Config.ClientSecret
         Scope        = $Config.Scope
     }
-
-    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+    $accessToken = Get-LisaAccessToken @SplatParams
 
     $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
     $authorizationHeaders.Add("Content-Type", "application/json")
     $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     #Get previous account, select only $Account.Keys
-    $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($aRef)"
+    $SplatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Headers = $authorizationHeaders
         Method  = 'Get'
-        Headers = $authorizationHeaders
     }
-    $PreviousAccount = Invoke-RestMethod @splatParams | Select-Object $Account.Keys
+    $outputcontext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
 
-    Write-Verbose "Updating KPN Lisa account for '$($p.DisplayName)'"
+    Write-Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
-    $splatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($aRef)/bulk"
+    $SplatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
+        Headers = $authorizationHeaders
         Method  = 'Patch'
-        Headers = $authorizationHeaders
-        Body    = ($Account | convertto-json)
+        Body    = $Account | ConvertTo-Json
     }
 
-    if (-not($dryRun -eq $true)) {
-        [void] (Invoke-RestMethod @splatParams)
+    if (-not($actionContext.DryRun -eq $True)) {
+        [void] (Invoke-RestMethod @SplatParams)
     }
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($p.DisplayName)' Updated. ObjectId: '$($aRef)'"
-            IsError = $false
+            Message = "Account for '$($Person.DisplayName)' Updated. ObjectId: '$($PersonContext.References.Account)'"
+            IsError = $False
         })
 
     # Updating manager
-    if ($null -eq $mRef) {
+    if ($null -eq $PersonContext.References.ManagerAccount) {
         $splatDeleteManagerParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/manager"
+            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
             Method  = 'Delete'
             Headers = $authorizationHeaders
         }
@@ -262,20 +187,18 @@ try {
             [void] (Invoke-RestMethod @splatDeleteManagerParams)
         }
 
-        $success = $true
-
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($p.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
-                IsError = $false
+                Message = "Manager for '$($Person.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+                IsError = $False
             })
     }
     else {
         $splatUpdateManagerParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($aRef)/Manager"
-            Method  = 'Put'
+            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
             Headers = $authorizationHeaders
-            Body    = ($mRef | ConvertTo-Json)
+            Method  = 'Put'
+            Body    = $PersonContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager
@@ -283,14 +206,14 @@ try {
             [void] (Invoke-RestMethod @splatUpdateManagerParams)
         }
 
-        $success = $true
-
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($p.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
-                IsError = $false
+                Message = "Manager for '$($Person.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                IsError = $False
             })
     }
+
+    $outputContext.Success = $True
 }
 catch {
     $ex = $PSItem
@@ -300,26 +223,7 @@ catch {
 
     $auditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($account.DisplayName) ($($aRef))]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error updating account [$($account.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($errorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }
-
-# Send results
-$Result = [PSCustomObject]@{
-    Success          = $Success
-    AuditLogs        = $AuditLogs
-    Account          = $Account
-    PreviousAccount  = $PreviousAccount
-
-    # Optionally return data for use in other systems
-    ExportData      = [PSCustomObject]@{
-        AccountReference  = $aRef
-        userPrincipalName = $PreviousAccount.userPrincipalName
-        employeeId        = $Account.employeeId
-        displayName       = $Account.displayName
-        mail              = $PreviousAccount.mail
-    }
-}
-
-Write-Output $Result | ConvertTo-Json -Depth 10

@@ -86,30 +86,30 @@ function Get-ErrorMessage {
     )
 
     process {
-        $errorMessage = [PSCustomObject]@{
-            VerboseErrorMessage = $null
-            AuditErrorMessage   = $null
+        $ErrorMessage = [PSCustomObject]@{
+            VerboseErrorMessage = $Null
+            AuditErrorMessage   = $Null
         }
 
         if (
             $ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException' -or
             $ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException'
         ) {
-            $httpErrorObject = Resolve-HTTPError -Error $ErrorObject
+            $HttpErrorObject = $ErrorObject | Resolve-HTTPError
 
-            $errorMessage.VerboseErrorMessage = $httpErrorObject.ErrorMessage
-            $errorMessage.AuditErrorMessage = $httpErrorObject.ErrorMessage
+            $ErrorMessage.VerboseErrorMessage = $HttpErrorObject.ErrorMessage
+            $ErrorMessage.AuditErrorMessage = $HttpErrorObject.ErrorMessage
         }
 
         # If error message empty, fall back on $ex.Exception.Message
-        if ([String]::IsNullOrEmpty($errorMessage.VerboseErrorMessage)) {
-            $errorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
+        if ([String]::IsNullOrEmpty($ErrorMessage.VerboseErrorMessage)) {
+            $ErrorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
         }
-        if ([String]::IsNullOrEmpty($errorMessage.AuditErrorMessage)) {
-            $errorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
+        if ([String]::IsNullOrEmpty($ErrorMessage.AuditErrorMessage)) {
+            $ErrorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
         }
 
-        Write-Output $errorMessage
+        Write-Output $ErrorMessage
     }
 }
 #endregion functions
@@ -122,9 +122,9 @@ function Get-ErrorMessage {
 )
 
 #region Aliasses
-$Config = $actionContext.Configuration
-$Account = $outputContext.Data
-$AuditLogs = $outputContext.AuditLogs
+$Config = $ActionContext.Configuration
+$Account = $OutputContext.Data
+$AuditLogs = $OutputContext.AuditLogs
 
 $Person = $PersonContext.Person
 $Manager = $PersonContext.Manager
@@ -144,64 +144,64 @@ try {
     }
     $accessToken = Get-LisaAccessToken @SplatParams
 
-    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
-    $authorizationHeaders.Add("Content-Type", "application/json")
-    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $AuthorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
+    $AuthorizationHeaders.Add("Content-Type", "application/json")
+    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     #region Correlation
-    if ($actionContext.CorrelationConfiguration.Enabled) {
-        $correlationField = $actionContext.CorrelationConfiguration.accountField
-        $correlationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
+    if ($ActionContext.CorrelationConfiguration.Enabled) {
+        $CorrelationField = $ActionContext.CorrelationConfiguration.accountField
+        $CorrelationValue = $ActionContext.CorrelationConfiguration.PersonFieldValue
 
-        if ($null -eq $correlationField -or $null -eq $correlationValue) {
+        if ($Null -eq $CorrelationField -or $Null -eq $CorrelationValue) {
             Write-Warning "Correlation is enabled but not configured correctly."
         }
 
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
-            Headers = $authorizationHeaders
+            Headers = $AuthorizationHeaders
             Method  = 'Get'
             Body    = @{
-                filter = "$($correlationField)+eq+'$($correlationValue)'"
+                filter = "$($CorrelationField)+eq+'$($CorrelationValue)'"
             }
         }
-        $correlatedAccount = Invoke-RestMethod @SplatParams
+        $CorrelatedAccount = Invoke-RestMethod @SplatParams
 
-        if ($correlatedAccount.count -gt 1) {
+        if ($CorrelatedAccount.count -gt 1) {
             throw "Multiple accounts found with filter: $($SplatParams.Body.filter)"
         }
 
-        if ($correlatedAccount.count -eq 1) {
-            $correlatedAccount = $correlatedAccount.value
+        if ($CorrelatedAccount.count -eq 1) {
+            $CorrelatedAccount = $CorrelatedAccount.value
 
-            $outputContext.AccountReference = $correlatedAccount.id
+            $OutputContext.AccountReference = $CorrelatedAccount.id
 
             $Account.PSObject.Properties | ForEach-Object {
-                if ($correlatedAccount.PSobject.Properties.Name.Contains($_.Name)) {
-                    $Account.$($_.Name) = $correlatedAccount.$($_.Name)
+                if ($CorrelatedAccount.PSobject.Properties.Name.Contains($_.Name)) {
+                    $Account.$($_.Name) = $CorrelatedAccount.$($_.Name)
                 }
             }
 
             $AuditLogs.Add([PSCustomObject]@{
                     Action  = "CorrelateAccount" # Optionally specify a different action for this audit log
-                    Message = "Correlated account with username $($correlatedAccount.UserName) on field $($correlationField) with value $($correlationValue)"
+                    Message = "Correlated account with username $($CorrelatedAccount.UserName) on field $($CorrelationField) with value $($CorrelationValue)"
                     IsError = $False
                 })
 
-            $outputContext.Success = $True
-            $outputContext.AccountCorrelated = $True
+            $OutputContext.Success = $True
+            $OutputContext.AccountCorrelated = $True
         }
     }
     #endregion correlation
 
     # Create KPN Lisa Account
-    if (-Not $outputContext.AccountCorrelated) {
+    if (-Not $OutputContext.AccountCorrelated) {
 
         Write-Verbose -Verbose "Creating KPN Lisa account for '$($Person.DisplayName)'"
 
-        if ($Account.PSobject.Properties.Name.Contains("mail") -and $null -eq $Account.mail) {
+        if ($Account.PSobject.Properties.Name.Contains("mail") -and $Null -eq $Account.mail) {
             $Account.mail = $Account.userPrincipalName
         }
 
@@ -212,15 +212,15 @@ try {
 
         $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
-            Headers = $authorizationHeaders
+            Headers = $AuthorizationHeaders
             Method  = 'Post'
             Body    = $Body | ConvertTo-Json
         }
 
-        if (-Not ($actionContext.DryRun -eq $True)) {
+        if (-Not ($ActionContext.DryRun -eq $True)) {
             $userResponse = Invoke-RestMethod @SplatParams
 
-            $outputContext.AccountReference = $userResponse.objectId
+            $OutputContext.AccountReference = $userResponse.objectId
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $userResponse.temporaryPassword
         }
         else {
@@ -239,16 +239,16 @@ try {
         )
 
         # Force the account disabled
-        $body.accountEnabled = $False
+        $Body.accountEnabled = $False
 
         $SplatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$($outputContext.AccountReference)/bulk"
-            Headers = $authorizationHeaders
+            Uri     = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
+            Headers = $AuthorizationHeaders
             Method  = 'Patch'
             Body    = $Body | ConvertTo-Json
         }
 
-        if (-not($actionContext.DryRun -eq $True)) {
+        if (-Not ($ActionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @SplatParams)
         }
         else {
@@ -260,13 +260,13 @@ try {
         # Set the manager
         if ($PersonContext.References.ManagerAccount) {
             $SplatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$($outputContext.AccountReference)/Manager"
-                Headers = $authorizationHeaders
+                Uri     = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
+                Headers = $AuthorizationHeaders
                 Method  = 'Put'
                 Body    = $PersonContext.References.ManagerAccount
             }
 
-            if (-not($actionContext.DryRun -eq $True)) {
+            if (-Not ($ActionContext.DryRun -eq $True)) {
                 [void] (Invoke-RestMethod @SplatParams)
             }
 
@@ -275,22 +275,22 @@ try {
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($Person.DisplayName)'. Id: $($outputContext.AccountReference)"
+                Message = "Created account for '$($Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
                 IsError = $False
             })
 
-        $outputContext.Success = $True
+        $OutputContext.Success = $True
     }
 }
 catch {
     $ex = $PSItem
-    $errorMessage = Get-ErrorMessage -ErrorObject $ex
+    $ErrorMessage = Get-ErrorMessage -ErrorObject $ex
 
-    Write-Verbose -Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($errorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
+    Write-Verbose -Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ErrorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
 
-    $auditLogs.Add([PSCustomObject]@{
+    $AuditLogs.Add([PSCustomObject]@{
             Action  = "CreateAccount" # Optionally specify a different action for this audit log
-            Message = "Error creating account [$($Person.DisplayName)]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error creating account [$($Person.DisplayName)]. Error Message: $($ErrorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }

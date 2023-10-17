@@ -86,30 +86,30 @@ function Get-ErrorMessage {
     )
 
     process {
-        $errorMessage = [PSCustomObject]@{
-            VerboseErrorMessage = $null
-            AuditErrorMessage   = $null
+        $ErrorMessage = [PSCustomObject]@{
+            VerboseErrorMessage = $Null
+            AuditErrorMessage   = $Null
         }
 
         if (
             $ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException' -or
             $ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException'
         ) {
-            $httpErrorObject = Resolve-HTTPError -Error $ErrorObject
+            $HttpErrorObject = $ErrorObject | Resolve-HTTPError
 
-            $errorMessage.VerboseErrorMessage = $httpErrorObject.ErrorMessage
-            $errorMessage.AuditErrorMessage = $httpErrorObject.ErrorMessage
+            $ErrorMessage.VerboseErrorMessage = $HttpErrorObject.ErrorMessage
+            $ErrorMessage.AuditErrorMessage = $HttpErrorObject.ErrorMessage
         }
 
         # If error message empty, fall back on $ex.Exception.Message
-        if ([String]::IsNullOrEmpty($errorMessage.VerboseErrorMessage)) {
-            $errorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
+        if ([String]::IsNullOrEmpty($ErrorMessage.VerboseErrorMessage)) {
+            $ErrorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
         }
-        if ([String]::IsNullOrEmpty($errorMessage.AuditErrorMessage)) {
-            $errorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
+        if ([String]::IsNullOrEmpty($ErrorMessage.AuditErrorMessage)) {
+            $ErrorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
         }
 
-        Write-Output $errorMessage
+        Write-Output $ErrorMessage
     }
 }
 #endregion functions
@@ -122,9 +122,9 @@ function Get-ErrorMessage {
 )
 
 #region Aliasses
-$Config = $actionContext.Configuration
-$Account = $outputContext.Data
-$AuditLogs = $outputContext.AuditLogs
+$Config = $ActionContext.Configuration
+$Account = $OutputContext.Data
+$AuditLogs = $OutputContext.AuditLogs
 
 $Person = $PersonContext.Person
 $Manager = $PersonContext.Manager
@@ -140,31 +140,31 @@ try {
         ClientSecret = $Config.ClientSecret
         Scope        = $Config.Scope
     }
-    $accessToken = Get-LisaAccessToken @SplatParams
+    $AccessToken = Get-LisaAccessToken @SplatParams
 
-    $authorizationHeaders = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
-    $authorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
-    $authorizationHeaders.Add("Content-Type", "application/json")
-    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
+    $AuthorizationHeaders.Add("Content-Type", "application/json")
+    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
     #Get previous account, select only $Account.Keys
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Headers = $authorizationHeaders
+        Headers = $AuthorizationHeaders
         Method  = 'Get'
     }
-    $outputcontext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
+    $Outputcontext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
 
     Write-Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
-        Headers = $authorizationHeaders
+        Headers = $AuthorizationHeaders
         Method  = 'Patch'
         Body    = $Account | ConvertTo-Json
     }
 
-    if (-not($actionContext.DryRun -eq $True)) {
+    if (-Not ($ActionContext.DryRun -eq $True)) {
         [void] (Invoke-RestMethod @SplatParams)
     }
 
@@ -175,15 +175,15 @@ try {
         })
 
     # Updating manager
-    if ($null -eq $PersonContext.References.ManagerAccount) {
+    if ($Null -eq $PersonContext.References.ManagerAccount) {
         $splatDeleteManagerParams = @{
             Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
             Method  = 'Delete'
-            Headers = $authorizationHeaders
+            Headers = $AuthorizationHeaders
         }
 
         # TODO:: validate return value on update and delete for manager
-        if (-not($dryRun -eq $true)) {
+        if (-Not ($ActionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @splatDeleteManagerParams)
         }
 
@@ -196,13 +196,13 @@ try {
     else {
         $splatUpdateManagerParams = @{
             Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
-            Headers = $authorizationHeaders
+            Headers = $AuthorizationHeaders
             Method  = 'Put'
             Body    = $PersonContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager
-        if (-not($dryRun -eq $true)) {
+        if (-Not ($ActionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @splatUpdateManagerParams)
         }
 
@@ -213,17 +213,17 @@ try {
             })
     }
 
-    $outputContext.Success = $True
+    $OutputContext.Success = $True
 }
 catch {
     $ex = $PSItem
-    $errorMessage = Get-ErrorMessage -ErrorObject $ex
+    $ErrorMessage = Get-ErrorMessage -ErrorObject $ex
 
-    Write-Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($errorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
+    Write-Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ErrorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
 
-    $auditLogs.Add([PSCustomObject]@{
+    $AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($account.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($errorMessage.AuditErrorMessage)."
+            Message = "Error updating account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($ErrorMessage.AuditErrorMessage)."
             IsError = $True
         })
 }

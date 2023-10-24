@@ -47,7 +47,7 @@ function Get-LisaAccessToken {
 }
 
 
-function Resolve-HTTPError {
+function Resolve-ErrorMessage {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipeline)]
@@ -56,60 +56,36 @@ function Resolve-HTTPError {
     )
 
     process {
-        $httpError = [PSCustomObject]@{
+        $Exception = [PSCustomObject]@{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
             MyCommand             = $ErrorObject.InvocationInfo.MyCommand
             RequestUri            = $ErrorObject.TargetObject.RequestUri
             ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = ''
+            ErrorMessage          = $Null
+            VerboseErrorMessage   = $Null
         }
 
-        if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
-            $httpError.ErrorMessage = $ErrorObject.ErrorDetails.Message
-        }
-        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $httpError.ErrorMessage = [System.IO.StreamReader]::new(
-                $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
-        }
-
-        Write-Output $httpError
-    }
-}
-
-
-function Get-ErrorMessage {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [object]
-        $ErrorObject
-    )
-
-    process {
-        $ErrorMessage = [PSCustomObject]@{
-            VerboseErrorMessage = $Null
-            AuditErrorMessage   = $Null
+        switch ($ErrorObject.Exception.GetType().FullName) {
+            "Microsoft.PowerShell.Commands.HttpResponseException" {
+                $ErrorCollection.ErrorMessage = $ErrorObject.ErrorDetails.Message
+                break
+            }
+            "System.Net.WebException" {
+                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
+                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                break
+            }
+            default {
+                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+            }
         }
 
-        if (
-            $ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException' -or
-            $ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException'
-        ) {
-            $HttpErrorObject = $ErrorObject | Resolve-HTTPError
+        $Exception.VerboseErrorMessage = @(
+            "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
+            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
+        ) -Join ' '
 
-            $ErrorMessage.VerboseErrorMessage = $HttpErrorObject.ErrorMessage
-            $ErrorMessage.AuditErrorMessage = $HttpErrorObject.ErrorMessage
-        }
-
-        # If error message empty, fall back on $ex.Exception.Message
-        if ([String]::IsNullOrEmpty($ErrorMessage.VerboseErrorMessage)) {
-            $ErrorMessage.VerboseErrorMessage = $ErrorObject.Exception.Message
-        }
-        if ([String]::IsNullOrEmpty($ErrorMessage.AuditErrorMessage)) {
-            $ErrorMessage.AuditErrorMessage = $ErrorObject.Exception.Message
-        }
-
-        Write-Output $ErrorMessage
+        Write-Output $Exception
     }
 }
 #endregion functions
@@ -132,7 +108,7 @@ $Manager = $PersonContext.Manager
 
 # Start Script
 try {
-    Write-Verbose 'Getting accessToken'
+    Write-Verbose -Verbose 'Getting accessToken'
 
     $SplatParams = @{
         TenantId     = $Config.TenantId
@@ -147,7 +123,7 @@ try {
     $AuthorizationHeaders.Add("Content-Type", "application/json")
     $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-    Write-Verbose "Enable KPN Lisa account for '$($Person.DisplayName)'"
+    Write-Verbose -Verbose "Enable KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
@@ -172,14 +148,13 @@ try {
     $OutputContext.Success = $True
 }
 catch {
-    $ex = $PSItem
-    $ErrorMessage = Get-ErrorMessage -ErrorObject $ex
+    $Exception = $PSItem | Resolve-ErrorMessage
 
-    Write-Verbose "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ErrorMessage.VerboseErrorMessage) [$($ex.ErrorDetails.Message)]"
+    Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "EnableAccount" # Optionally specify a different action for this audit log
-            Message = "Error enabling account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($ErrorMessage.AuditErrorMessage)."
+            Message = "Error enabling account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
             IsError = $True
         })
 }

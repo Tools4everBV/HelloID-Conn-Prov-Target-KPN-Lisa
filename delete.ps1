@@ -144,7 +144,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Error deleting account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            Message = "Error deleting account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

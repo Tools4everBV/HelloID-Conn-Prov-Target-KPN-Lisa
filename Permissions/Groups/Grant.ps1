@@ -143,7 +143,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission" # Optionally specify a different action for this audit log
-            Message = "Failed to add permission $($personContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            Message = "Failed to add permission $($personContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

@@ -158,7 +158,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove Group permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            Message = "Failed to remove Group permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

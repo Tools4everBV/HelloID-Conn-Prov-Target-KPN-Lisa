@@ -148,7 +148,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "EnableAccount" # Optionally specify a different action for this audit log
-            Message = "Error enabling account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            Message = "Error enabling account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

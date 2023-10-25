@@ -192,7 +192,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            Message = "Error updating account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

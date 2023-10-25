@@ -155,14 +155,14 @@ try {
 
     $SplatParams = @{
         Uri         = $Config.BaseUrl
-        Endpoint    = "Groups"
+        Endpoint    = "AuthorizationProfiles"
         AccessToken = $AccessToken
     }
-    $Groups = Get-LisaCollection @SplatParams
+    $AuthorizationProfiles = Get-LisaCollection @SplatParams
 
-    $OutputContext.Permissions = $Groups | ForEach-Object {
+    $OutputContext.Permissions = $AuthorizationProfiles | ForEach-Object {
         [PSCustomObject]@{
-            DisplayName    = "Group - $($PSItem.DisplayName)"
+            DisplayName    = "AuthorizationProfile - $($PSItem.displayName)"
             Identification = @{
                 Reference = $PSItem.id
             }

@@ -80,7 +80,12 @@ function Get-LisaCollection {
 
             $SplatParams.Body.SkipToken = $Result.nextLink
 
-            Write-Output $Result.value
+            if ($Result -is [array]) {
+                Write-Output $Result
+            }
+            else {
+                Write-Output $Result.value
+            }
         }
         until([string]::IsNullOrWhiteSpace($Result.nextLink))
     }

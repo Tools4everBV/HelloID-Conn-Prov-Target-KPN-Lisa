@@ -41,60 +41,6 @@ function Get-LisaAccessToken {
 }
 
 
-function Get-LisaCollection {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]
-        $Uri,
-
-        [Parameter(Mandatory)]
-        [string]
-        $Endpoint,
-
-        [Parameter(Mandatory)]
-        [string]
-        $AccessToken
-    )
-
-    try {
-        Write-Verbose 'Setting authorizationHeaders'
-
-        $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-        $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-        $AuthorizationHeaders.Add("Content-Type", "application/json")
-        $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
-
-        $SplatParams = @{
-            Uri     = "$($Uri)/$($Endpoint)"
-            Method  = "Get"
-            Headers = $AuthorizationHeaders
-            Body    = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-        }
-
-        do {
-            $Result = Invoke-RestMethod @SplatParams
-
-            $SplatParams.Body.SkipToken = $Result.nextLink
-
-            if ($Result -is [array]) {
-                Write-Output $Result
-            }
-            else {
-                Write-Output $Result.value
-            }
-        }
-        until([string]::IsNullOrWhiteSpace($Result.nextLink))
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
-    }
-}
-
-
 function Resolve-ErrorMessage {
     [CmdletBinding()]
     param (
@@ -147,32 +93,46 @@ function Resolve-ErrorMessage {
 
 #region Aliasses
 $Config = $ActionContext.Configuration
+$AuditLogs = $OutputContext.AuditLogs
 #endregion Aliasses
 
+# Start Script
 try {
     # Getting accessToken
     $AccessToken = $Config.AzureAD | Get-LisaAccessToken
 
-    $SplatParams = @{
-        Uri         = $Config.BaseUrl
-        Endpoint    = "Groups"
-        AccessToken = $AccessToken
-    }
-    $Groups = Get-LisaCollection @SplatParams
+    # Formatting Authorisation Headers
+    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
+    $AuthorizationHeaders.Add("Content-Type", "application/json")
+    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-    $OutputContext.Permissions = $Groups | ForEach-Object {
-        [PSCustomObject]@{
-            DisplayName    = "Group - $($PSItem.DisplayName)"
-            Identification = @{
-                Reference = $PSItem.id
-            }
-        }
+    $SplatParams = @{
+        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LisaRoles/$($personContext.References.Permission.Reference)"
+        Headers = $AuthorizationHeaders
+        Method  = 'Delete'
     }
+
+    if (-Not ($ActionContext.DryRun -eq $True)) {
+        [void] (Invoke-RestMethod @SplatParams) #If 200 it returns a Empty String
+    }
+
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "RevokePermission"
+            Message = "Permission $($personContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            IsError = $False
+        })
+
+    $OutputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    throw $Exception.ErrorMessage
+    $AuditLogs.Add([PSCustomObject]@{
+            Action  = "RevokePermission" # Optionally specify a different action for this audit log
+            Message = "Failed to remove permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.AuditErrorMessage)."
+            IsError = $True
+        })
 }

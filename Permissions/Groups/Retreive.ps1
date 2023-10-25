@@ -1,85 +1,4 @@
-$Config = $configuration | ConvertFrom-Json
-$VerbosePreference = "Continue"
-
 #region functions
-function Invoke-LisaRestMethod {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]
-        $Uri,
-
-        [Parameter(Mandatory = $true)]
-        [string]
-        $Endpoint,
-
-        [Parameter(Mandatory = $true)]
-        [string]
-        $Method,
-
-        [Parameter(Mandatory = $false)]
-        [string]
-        $Body,
-
-        [Parameter(Mandatory = $false)]
-        [int]
-        $Take = 50,
-
-        [string]
-        $AccessToken = $script:accessToken
-    )
-
-    try {
-        Write-Verbose 'Setting authorizationHeaders'
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-        $authorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
-
-        $requestUrl = "$($Uri)/$($Endpoint)?Top=$take"
-        $splatParams = @{
-            Uri     = $requestUrl
-            Headers = $authorizationHeaders
-            Method  = $Method
-        }
-
-        if ($Body) {
-            Write-Verbose 'Adding body'
-            $splatParams['body'] = $body
-        }
-
-        $returnValue = [System.Collections.Generic.List[object]]::new()
-        do {
-            #Set the nextlink token to the Request URL
-            if ($rawResult.nextLink) {
-                if ($splatParams['Uri'] -match '\?' ) {
-                    $splatParams['Uri'] = "$($requestUrl)&SkipToken=$($rawResult.nextLink)"
-                }
-                else {
-                    $splatParams['Uri'] = "$($requestUrl)?SkipToken=$($rawResult.nextLink)"
-                }
-            }
-            $rawResult = Invoke-RestMethod @splatParams
-
-            # Supports Array and single object response!
-            if ($rawResult.value -is [Object[]]) {
-                Write-Verbose 'Retrieving paged results'
-                $returnValue.AddRange($rawResult.value)
-            }
-            else {
-                $returnValue.add($rawResult.value)
-            }
-
-        }until([string]::IsNullOrWhiteSpace($rawResult.nextLink))
-
-        Write-Output $returnValue
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($_)
-    }
-}
-
-
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
@@ -112,49 +31,148 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @RestMethod
+
+        Write-Output $Response.access_token
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
+
+
+function Get-LisaCollection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]
+        $Uri,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Endpoint,
+
+        [Parameter(Mandatory)]
+        [string]
+        $AccessToken
+    )
+
+    try {
+        Write-Verbose 'Setting authorizationHeaders'
+
+        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+        $authorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
+        $authorizationHeaders.Add("Content-Type", "application/json")
+        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+
+        $SplatParams = @{
+            Uri     = "$($Uri)/$($Endpoint)"
+            Method  = "Get"
+            Headers = $authorizationHeaders
+            Body    = @{
+                Top       = 999
+                SkipToken = $null
+            }
+        }
+
+        do {
+            $Result = Invoke-RestMethod @SplatParams
+
+            $SplatParams.Body.SkipToken = $Result.nextLink
+
+            Write-Output $Result.value
+        }
+        until([string]::IsNullOrWhiteSpace($Result.nextLink))
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($_)
+    }
+}
+
+
+function Resolve-ErrorMessage {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object]
+        $ErrorObject
+    )
+
+    process {
+        $Exception = [PSCustomObject]@{
+            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
+            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
+            RequestUri            = $ErrorObject.TargetObject.RequestUri
+            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
+            ErrorMessage          = $Null
+            VerboseErrorMessage   = $Null
+        }
+
+        switch ($ErrorObject.Exception.GetType().FullName) {
+            "Microsoft.PowerShell.Commands.HttpResponseException" {
+                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
+                break
+            }
+            "System.Net.WebException" {
+                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
+                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                break
+            }
+            default {
+                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+            }
+        }
+
+        $Exception.VerboseErrorMessage = @(
+            "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
+            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
+        ) -Join ' '
+
+        Write-Output $Exception
+    }
+}
 #endregion functions
 
-$splatGetTokenParams = @{
-    TenantId     = $Config.TenantId
-    ClientId     = $Config.ClientId
-    ClientSecret = $Config.ClientSecret
-    Scope        = $Config.Scope
-}
+# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = @(
+    [Net.SecurityProtocolType]::Tls
+    [Net.SecurityProtocolType]::Tls11
+    [Net.SecurityProtocolType]::Tls12
+)
+
+#region Aliasses
+$Config = $ActionContext.Configuration
+#endregion Aliasses
 
 try {
-    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+    $SplatParams = @{
+        TenantId     = $Config.TenantId
+        ClientId     = $Config.ClientId
+        ClientSecret = $Config.ClientSecret
+        Scope        = $Config.Scope
+    }
+    $AccessToken = Get-LisaAccessToken @SplatParams
+
+    $splatParams = @{
+        Uri         = $Config.BaseUrl
+        Endpoint    = "Groups"
+        AccessToken = $AccessToken
+    }
+    $Groups = Get-LisaCollection @splatParams
+
+    $outputContext.Permissions = $Groups | ForEach-Object {
+        [PSCustomObject]@{
+            DisplayName    = "Group - $($_.DisplayName)"
+            Identification = @{
+                Reference = $_.id
+            }
+        }
+    }
 }
 catch {
-    throw "Could not get Lisa AccesToken, $($_)"
-}
+    $Exception = $PSItem | Resolve-ErrorMessage
 
-$splatParams = @{
-    Uri         = "$($Config.BaseUrl)"
-    Endpoint    = "groups"
-    Method      = 'Get'
-    AccessToken = $accessToken
-}
+    Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-try {
-    $resultGroups = (Invoke-LisaRestMethod @splatParams)
+    throw $Exception.ErrorMessage
 }
-catch {
-    throw "Could not get Lisa Groups, $($_)"
-}
-
-$permissions = $resultGroups | Select-Object @{
-    Name       = 'DisplayName'
-    Expression = { $_.DisplayName }
-}, @{
-    Name       = "Identification"
-    Expression = { @{Reference = $_.id} }
-}
-
-
-Write-Output ($permissions | ConvertTo-Json -Depth 10)

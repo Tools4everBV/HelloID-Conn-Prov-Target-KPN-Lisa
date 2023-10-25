@@ -67,7 +67,7 @@ function Resolve-ErrorMessage {
 
         switch ($ErrorObject.Exception.GetType().FullName) {
             "Microsoft.PowerShell.Commands.HttpResponseException" {
-                $ErrorCollection.ErrorMessage = $ErrorObject.ErrorDetails.Message
+                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
                 break
             }
             "System.Net.WebException" {

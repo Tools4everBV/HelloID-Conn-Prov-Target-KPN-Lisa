@@ -2,25 +2,25 @@
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $Scope
     )
 
     try {
-        $RestMethod = @{
+        $SplatParams = @{
             Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
             ContentType = "application/x-www-form-urlencoded"
             Method      = "Post"
@@ -31,12 +31,12 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        $Response = Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @SplatParams
 
         Write-Output $Response.access_token
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($_)
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
@@ -60,18 +60,18 @@ function Get-LisaCollection {
     try {
         Write-Verbose 'Setting authorizationHeaders'
 
-        $authorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-        $authorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+        $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+        $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
+        $AuthorizationHeaders.Add("Content-Type", "application/json")
+        $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
         $SplatParams = @{
             Uri     = "$($Uri)/$($Endpoint)"
             Method  = "Get"
-            Headers = $authorizationHeaders
+            Headers = $AuthorizationHeaders
             Body    = @{
                 Top       = 999
-                SkipToken = $null
+                SkipToken = $Null
             }
         }
 
@@ -85,7 +85,7 @@ function Get-LisaCollection {
         until([string]::IsNullOrWhiteSpace($Result.nextLink))
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($_)
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
@@ -145,26 +145,21 @@ $Config = $ActionContext.Configuration
 #endregion Aliasses
 
 try {
-    $SplatParams = @{
-        TenantId     = $Config.TenantId
-        ClientId     = $Config.ClientId
-        ClientSecret = $Config.ClientSecret
-        Scope        = $Config.Scope
-    }
-    $AccessToken = Get-LisaAccessToken @SplatParams
+    # Getting accessToken
+    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
 
-    $splatParams = @{
+    $SplatParams = @{
         Uri         = $Config.BaseUrl
         Endpoint    = "LicenseProfiles"
         AccessToken = $AccessToken
     }
-    $LicenseProfiles = Get-LisaCollection @splatParams
+    $LicenseProfiles = Get-LisaCollection @SplatParams
 
-    $outputContext.Permissions = $LicenseProfiles | ForEach-Object {
+    $OutputContext.Permissions = $LicenseProfiles | ForEach-Object {
         [PSCustomObject]@{
-            DisplayName    = "LicenseProfile - $($_.DisplayName)"
+            DisplayName    = "LicenseProfile - $($PSItem.DisplayName)"
             Identification = @{
-                Reference = $_.licenseProfileId
+                Reference = $PSItem.licenseProfileId
             }
         }
     }

@@ -8,25 +8,25 @@
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $Scope
     )
 
     try {
-        $RestMethod = @{
+        $SplatParams = @{
             Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
             ContentType = "application/x-www-form-urlencoded"
             Method      = "Post"
@@ -37,12 +37,12 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        $Response = Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @SplatParams
 
         Write-Output $Response.access_token
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($_)
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
@@ -108,16 +108,10 @@ $Manager = $PersonContext.Manager
 
 # Start Script
 try {
-    Write-Verbose -Verbose 'Getting accessToken'
+    # Getting accessToken
+    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
 
-    $SplatParams = @{
-        TenantId     = $Config.TenantId
-        ClientId     = $Config.ClientId
-        ClientSecret = $Config.ClientSecret
-        Scope        = $Config.Scope
-    }
-    $AccessToken = Get-LisaAccessToken @SplatParams
-
+    # Formatting Authorisation Headers
     $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
     $AuthorizationHeaders.Add("Content-Type", "application/json")
@@ -129,7 +123,7 @@ try {
         Headers = $AuthorizationHeaders
         Method  = 'Get'
     }
-    $Outputcontext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
+    $OutputContext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
 
     Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
@@ -137,7 +131,7 @@ try {
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
         Headers = $AuthorizationHeaders
         Method  = 'Patch'
-        Body    = $Account | ConvertTo-Json
+        Body    = $Account
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -165,7 +159,7 @@ try {
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($Person.DisplayName)' deleted. ObjectId: '$($userResponse.objectId)'"
+                Message = "Manager for '$($Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }
@@ -184,7 +178,7 @@ try {
 
         $AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($Person.DisplayName)' Updated. ObjectId: '$($userResponse.objectId)'"
+                Message = "Manager for '$($Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }

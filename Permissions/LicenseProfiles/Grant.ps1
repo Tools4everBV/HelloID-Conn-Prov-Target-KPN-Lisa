@@ -2,25 +2,25 @@
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $Scope
     )
 
     try {
-        $RestMethod = @{
+        $SplatParams = @{
             Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
             ContentType = "application/x-www-form-urlencoded"
             Method      = "Post"
@@ -31,12 +31,12 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        $Response = Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @SplatParams
 
         Write-Output $Response.access_token
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($_)
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
@@ -98,24 +98,18 @@ $AuditLogs = $OutputContext.AuditLogs
 
 # Start Script
 try {
-    Write-Verbose -Verbose 'Getting accessToken'
+    # Getting accessToken
+    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
 
-    $SplatParams = @{
-        TenantId     = $Config.TenantId
-        ClientId     = $Config.ClientId
-        ClientSecret = $Config.ClientSecret
-        Scope        = $Config.Scope
-    }
-    $AccessToken = Get-LisaAccessToken @SplatParams
-
+    # Formatting Authorisation Headers
     $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
     $AuthorizationHeaders.Add("Content-Type", "application/json")
     $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
-    $splatParams = @{
+    $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LicenseProfiles"
-        Headers = $authorizationHeaders
+        Headers = $AuthorizationHeaders
         Method  = 'Post'
         body    = @{
             licenseProfileId = $personContext.References.Permission.Reference
@@ -123,7 +117,7 @@ try {
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @splatParams) #If 200 it returns a Empty String
+        [void] (Invoke-RestMethod @SplatParams) #If 200 it returns a Empty String
     }
 
     $AuditLogs.Add([PSCustomObject]@{

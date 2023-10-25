@@ -8,25 +8,25 @@
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $Scope
     )
 
     try {
-        $RestMethod = @{
+        $SplatParams = @{
             Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
             ContentType = "application/x-www-form-urlencoded"
             Method      = "Post"
@@ -37,12 +37,12 @@ function Get-LisaAccessToken {
                 scope         = $Scope
             }
         }
-        $Response = Invoke-RestMethod @RestMethod
+        $Response = Invoke-RestMethod @SplatParams
 
         Write-Output $Response.access_token
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($_)
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
@@ -110,18 +110,12 @@ $Manager = $PersonContext.Manager
 try {
     # TODO:: stukje beunen voor required fields, met harde error als hier niet aan voldaan wordt
 
-    Write-Verbose -Verbose "Getting accessToken"
+    # Getting accessToken
+    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
 
-    $SplatParams = @{
-        TenantId     = $Config.TenantId
-        ClientId     = $Config.ClientId
-        ClientSecret = $Config.ClientSecret
-        Scope        = $Config.Scope
-    }
-    $accessToken = Get-LisaAccessToken @SplatParams
-
+    # Formatting Authorisation Headers
     $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $AuthorizationHeaders.Add("Authorization", "Bearer $($accessToken)")
+    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
     $AuthorizationHeaders.Add("Content-Type", "application/json")
     $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
 
@@ -155,8 +149,8 @@ try {
             $OutputContext.AccountReference = $CorrelatedAccount.id
 
             $Account.PSObject.Properties | ForEach-Object {
-                if ($CorrelatedAccount.PSobject.Properties.Name.Contains($_.Name)) {
-                    $Account.$($_.Name) = $CorrelatedAccount.$($_.Name)
+                if ($CorrelatedAccount.PSobject.Properties.Name.Contains($PSItem.Name)) {
+                    $Account.$($PSItem.Name) = $CorrelatedAccount.$($PSItem.Name)
                 }
             }
 
@@ -190,14 +184,14 @@ try {
             Uri     = "$($Config.BaseUrl)/Users"
             Headers = $AuthorizationHeaders
             Method  = 'Post'
-            Body    = $Body | ConvertTo-Json
+            Body    = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
-            $userResponse = Invoke-RestMethod @SplatParams
+            $UserResponse = Invoke-RestMethod @SplatParams
 
-            $OutputContext.AccountReference = $userResponse.objectId
-            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $userResponse.temporaryPassword
+            $OutputContext.AccountReference = $UserResponse.objectId
+            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $UserResponse.temporaryPassword
         }
         else {
             Write-Verbose -Verbose (
@@ -221,7 +215,7 @@ try {
             Uri     = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
             Headers = $AuthorizationHeaders
             Method  = 'Patch'
-            Body    = $Body | ConvertTo-Json
+            Body    = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {

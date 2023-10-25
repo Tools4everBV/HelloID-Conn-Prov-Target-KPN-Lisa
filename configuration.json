@@ -1,6 +1,6 @@
 [
     {
-        "key": "TenantId",
+        "key": "AzureAD.TenantId",
         "type": "input",
         "templateOptions": {
             "label": "AzureAD Tenant ID",
@@ -8,7 +8,7 @@
         }
     },
     {
-        "key": "ClientId",
+        "key": "AzureAD.ClientId",
         "type": "input",
         "templateOptions": {
             "label": "AzureAD ClientId",
@@ -16,7 +16,7 @@
         }
     },
     {
-        "key": "ClientSecret",
+        "key": "AzureAD.ClientSecret",
         "type": "input",
         "templateOptions": {
             "label": "AzureAD ClientSecret",
@@ -25,11 +25,26 @@
         }
     },
     {
-        "key": "Scope",
-        "type": "input",
+        "key": "AzureAD.Scope",
+        "type": "select",
         "templateOptions": {
             "label": "Scope",
-            "required": true
+            "placeholder": "Please select an environment",
+            "required": true,
+            "options": [
+                {
+                    "value": "https://kpnwp.onmicrosoft.com/kpnmwpdmwpapi/.default",
+                    "label": "KPN Modern Workplace - Development"
+                },
+                {
+                    "value": "https://kpnwp.onmicrosoft.com/kpnmwptmwpapi/.default",
+                    "label": "KPN Modern Workplace - Test"
+                },
+                {
+                    "value": "https://kpnwp.onmicrosoft.com/kpnmwppmwpapi/.default",
+                    "label": "KPN Modern Workplace - Production"
+                }
+            ]
         }
     },
     {

@@ -134,7 +134,7 @@ try {
             Headers = $AuthorizationHeaders
             Method  = 'Get'
             Body    = @{
-                filter = "$($CorrelationField)+eq+'$($CorrelationValue)'"
+                filter = "$($CorrelationField) eq '$($CorrelationValue)'"
             }
         }
         $CorrelatedAccount = Invoke-RestMethod @SplatParams
@@ -184,7 +184,9 @@ try {
             Uri     = "$($Config.BaseUrl)/Users"
             Headers = $AuthorizationHeaders
             Method  = 'Post'
-            Body    = $Body
+            Body    = [System.Text.Encoding]::UTF8.GetBytes(
+                ($Body | ConvertTo-Json -Compress)
+            )
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -194,9 +196,7 @@ try {
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $UserResponse.temporaryPassword
         }
         else {
-            Write-Verbose -Verbose (
-                $SplatParams.Body
-            )
+            Write-Verbose -Verbose ($Body | ConvertTo-Json)
 
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue "FakePassword"
         }
@@ -215,16 +215,16 @@ try {
             Uri     = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
             Headers = $AuthorizationHeaders
             Method  = 'Patch'
-            Body    = $Body
+            Body    = [System.Text.Encoding]::UTF8.GetBytes(
+                ($Body | ConvertTo-Json -Compress)
+            )
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @SplatParams)
         }
         else {
-            Write-Verbose -Verbose (
-                $SplatParams.Body
-            )
+            Write-Verbose -Verbose ($Body | ConvertTo-Json)
         }
 
         # Set the manager

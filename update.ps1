@@ -123,7 +123,9 @@ try {
         Headers = $AuthorizationHeaders
         Method  = 'Get'
     }
-    $OutputContext.PreviousData = Invoke-RestMethod @SplatParams | Select-Object $Account.PSObject.Properties.Name
+    $PreviousPerson = Invoke-RestMethod @SplatParams
+
+    $OutputContext.PreviousData = $PreviousPerson | Select-Object $Account.PSObject.Properties.Name
 
     Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
@@ -131,7 +133,9 @@ try {
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
         Headers = $AuthorizationHeaders
         Method  = 'Patch'
-        Body    = $Account
+        Body    = [System.Text.Encoding]::UTF8.GetBytes(
+                ($Account | ConvertTo-Json -Compress)
+            )
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

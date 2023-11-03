@@ -125,15 +125,31 @@ try {
         Method  = 'Delete'
     }
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @SplatParams)
-    }
+    try {
+        if (-not($ActionContext.DryRun -eq $true)) {
+            [void] (Invoke-RestMethod @splatParams)
+        }
 
-    $AuditLogs.Add([PSCustomObject]@{
-            Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($Person.DisplayName)' is deleted"
-            IsError = $False
-        })
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "DeleteAccount" # Optionally specify a different action for this audit log
+                Message = "Account for '$($p.DisplayName)' is deleted"
+                IsError = $False
+            })
+    }
+    catch {
+        $StatusCode = $_.Exception.Response.StatusCode
+
+        if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "DeleteAccount" # Optionally specify a different action for this audit log
+                    Message = "Account for '$($p.DisplayName)' doesn't exist, mark as deleted"
+                    IsError = $False
+                })
+        }
+        else {
+            throw $_
+        }
+    }
 
     $OutputContext.Success = $True
 }

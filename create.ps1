@@ -1,9 +1,3 @@
-#####################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Create
-#
-# Version: 1.0.0.0
-#####################################################
-
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -22,7 +16,11 @@ function Get-LisaAccessToken {
 
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
-        $Scope
+        $Scope,
+
+        [Parameter()]
+        [switch]
+        $AsSecureString
     )
 
     try {
@@ -39,7 +37,12 @@ function Get-LisaAccessToken {
         }
         $Response = Invoke-RestMethod @SplatParams
 
-        Write-Output $Response.access_token
+        if ($AsSecureString) {
+            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
+        }
+        else {
+            Write-Output ($Response.access_token)
+        }
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
@@ -90,12 +93,6 @@ function Resolve-ErrorMessage {
 }
 #endregion functions
 
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
 
 #region Aliasses
 $Config = $ActionContext.Configuration
@@ -106,18 +103,18 @@ $Person = $PersonContext.Person
 $Manager = $PersonContext.Manager
 #endregion Aliasses
 
+
 # Start Script
 try {
-    # TODO:: stukje beunen voor required fields, met harde error als hier niet aan voldaan wordt
-
-    # Getting accessToken
-    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
-
-    # Formatting Authorisation Headers
-    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-    $AuthorizationHeaders.Add("Content-Type", "application/json")
-    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    # Formatting Headers and authentication for KPN Lisa Requests
+    $LisaRequest = @{
+        Authentication = "Bearer"
+        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        ContentType    = "application/json; charset=utf-8"
+        Headers        = @{
+            "Mwp-Api-Version" = "1.0"
+        }
+    }
 
     #region Correlation
     if ($ActionContext.CorrelationConfiguration.Enabled) {
@@ -131,13 +128,12 @@ try {
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
-            Headers = $AuthorizationHeaders
             Method  = 'Get'
             Body    = @{
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
             }
         }
-        $CorrelatedAccount = Invoke-RestMethod @SplatParams
+        $CorrelatedAccount = Invoke-RestMethod @LisaRequest @SplatParams
 
         if ($CorrelatedAccount.count -gt 1) {
             throw "Multiple accounts found with filter: $($SplatParams.Body.filter)"
@@ -182,15 +178,12 @@ try {
 
         $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users"
-            Headers = $AuthorizationHeaders
             Method  = 'Post'
-            Body    = [System.Text.Encoding]::UTF8.GetBytes(
-                ($Body | ConvertTo-Json -Compress)
-            )
+            Body    = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
-            $UserResponse = Invoke-RestMethod @SplatParams
+            $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
 
             $OutputContext.AccountReference = $UserResponse.objectId
             $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $UserResponse.temporaryPassword
@@ -213,15 +206,12 @@ try {
 
         $SplatParams = @{
             Uri     = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
-            Headers = $AuthorizationHeaders
             Method  = 'Patch'
-            Body    = [System.Text.Encoding]::UTF8.GetBytes(
-                ($Body | ConvertTo-Json -Compress)
-            )
+            Body    = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @SplatParams)
+            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
         else {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
@@ -231,13 +221,12 @@ try {
         if ($PersonContext.References.ManagerAccount) {
             $SplatParams = @{
                 Uri     = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
-                Headers = $AuthorizationHeaders
                 Method  = 'Put'
                 Body    = $PersonContext.References.ManagerAccount
             }
 
             if (-Not ($ActionContext.DryRun -eq $True)) {
-                [void] (Invoke-RestMethod @SplatParams)
+                [void] (Invoke-RestMethod @LisaRequest @SplatParams)
             }
 
             Write-Verbose -Verbose "Added Manager $($Manager.displayName) to '$($Person.DisplayName)'"

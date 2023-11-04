@@ -1,9 +1,3 @@
-#####################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Update
-#
-# Version: 1.0.0.0
-#####################################################
-
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -22,7 +16,11 @@ function Get-LisaAccessToken {
 
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
-        $Scope
+        $Scope,
+
+        [Parameter()]
+        [switch]
+        $AsSecureString
     )
 
     try {
@@ -39,7 +37,12 @@ function Get-LisaAccessToken {
         }
         $Response = Invoke-RestMethod @SplatParams
 
-        Write-Output $Response.access_token
+        if ($AsSecureString) {
+            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
+        }
+        else {
+            Write-Output ($Response.access_token)
+        }
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
@@ -90,12 +93,6 @@ function Resolve-ErrorMessage {
 }
 #endregion functions
 
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
 
 #region Aliasses
 $Config = $ActionContext.Configuration
@@ -106,24 +103,25 @@ $Person = $PersonContext.Person
 $Manager = $PersonContext.Manager
 #endregion Aliasses
 
+
 # Start Script
 try {
-    # Getting accessToken
-    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
-
-    # Formatting Authorisation Headers
-    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-    $AuthorizationHeaders.Add("Content-Type", "application/json")
-    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    # Formatting Headers and authentication for KPN Lisa Requests
+    $LisaRequest = @{
+        Authentication = "Bearer"
+        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        ContentType    = "application/json; charset=utf-8"
+        Headers        = @{
+            "Mwp-Api-Version" = "1.0"
+        }
+    }
 
     #Get previous account, select only $Account.Keys
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Headers = $AuthorizationHeaders
         Method  = 'Get'
     }
-    $PreviousPerson = Invoke-RestMethod @SplatParams
+    $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
     $OutputContext.PreviousData = $PreviousPerson | Select-Object $Account.PSObject.Properties.Name
 
@@ -131,15 +129,12 @@ try {
 
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
-        Headers = $AuthorizationHeaders
         Method  = 'Patch'
-        Body    = [System.Text.Encoding]::UTF8.GetBytes(
-                ($Account | ConvertTo-Json -Compress)
-            )
+        Body    = $Account
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @SplatParams)
+        [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
     $AuditLogs.Add([PSCustomObject]@{
@@ -150,15 +145,14 @@ try {
 
     # Updating manager
     if ($Null -eq $PersonContext.References.ManagerAccount) {
-        $splatDeleteManagerParams = @{
+        $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
             Method  = 'Delete'
-            Headers = $AuthorizationHeaders
         }
 
         # TODO:: validate return value on update and delete for manager
         if (-Not ($ActionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @splatDeleteManagerParams)
+            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
         $AuditLogs.Add([PSCustomObject]@{
@@ -168,16 +162,15 @@ try {
             })
     }
     else {
-        $splatUpdateManagerParams = @{
+        $SplatParams = @{
             Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
-            Headers = $AuthorizationHeaders
             Method  = 'Put'
             Body    = $PersonContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager
         if (-Not ($ActionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @splatUpdateManagerParams)
+            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
         $AuditLogs.Add([PSCustomObject]@{

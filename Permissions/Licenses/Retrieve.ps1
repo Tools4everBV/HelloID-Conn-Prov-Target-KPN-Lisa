@@ -16,7 +16,11 @@ function Get-LisaAccessToken {
 
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
-        $Scope
+        $Scope,
+
+        [Parameter()]
+        [switch]
+        $AsSecureString
     )
 
     try {
@@ -33,7 +37,12 @@ function Get-LisaAccessToken {
         }
         $Response = Invoke-RestMethod @SplatParams
 
-        Write-Output $Response.access_token
+        if ($AsSecureString) {
+            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
+        }
+        else {
+            Write-Output ($Response.access_token)
+        }
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
@@ -53,30 +62,33 @@ function Get-LisaCollection {
         $Endpoint,
 
         [Parameter(Mandatory)]
-        [string]
+        [securestring]
         $AccessToken
     )
 
     try {
         Write-Verbose 'Setting authorizationHeaders'
 
-        $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-        $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-        $AuthorizationHeaders.Add("Content-Type", "application/json")
-        $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
+        $LisaRequest = @{
+            Authentication = "Bearer"
+            Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+            ContentType    = "application/json; charset=utf-8"
+            Headers        = @{
+                "Mwp-Api-Version" = "1.0"
+            }
+        }
 
         $SplatParams = @{
-            Uri     = "$($Uri)/$($Endpoint)"
-            Method  = "Get"
-            Headers = $AuthorizationHeaders
-            Body    = @{
+            Uri    = "$($Uri)/$($Endpoint)"
+            Method = "Get"
+            Body   = @{
                 Top       = 999
                 SkipToken = $Null
             }
         }
 
         do {
-            $Result = Invoke-RestMethod @SplatParams
+            $Result = Invoke-RestMethod @LisaRequest @SplatParams
 
             $SplatParams.Body.SkipToken = $Result.nextLink
 
@@ -138,20 +150,16 @@ function Resolve-ErrorMessage {
 }
 #endregion functions
 
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
 
 #region Aliasses
 $Config = $ActionContext.Configuration
 #endregion Aliasses
 
+
+# Start Script
 try {
     # Getting accessToken
-    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
+    $AccessToken = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
         Uri         = $Config.BaseUrl

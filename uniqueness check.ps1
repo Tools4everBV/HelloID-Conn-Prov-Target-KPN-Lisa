@@ -16,7 +16,11 @@ function Get-LisaAccessToken {
 
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
-        $Scope
+        $Scope,
+
+        [Parameter()]
+        [switch]
+        $AsSecureString
     )
 
     try {
@@ -33,7 +37,12 @@ function Get-LisaAccessToken {
         }
         $Response = Invoke-RestMethod @SplatParams
 
-        Write-Output $Response.access_token
+        if ($AsSecureString) {
+            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
+        }
+        else {
+            Write-Output ($Response.access_token)
+        }
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
@@ -84,35 +93,31 @@ function Resolve-ErrorMessage {
 }
 #endregion functions
 
-# Set TLS to accept TLS, TLS 1.1 and TLS 1.2
-[Net.ServicePointManager]::SecurityProtocol = @(
-    [Net.SecurityProtocolType]::Tls
-    [Net.SecurityProtocolType]::Tls11
-    [Net.SecurityProtocolType]::Tls12
-)
 
 #region Aliasses
 $Config = $ActionContext.Configuration
 $Account = $ActionContext.Data
 #endregion Aliasses
 
+
 $FieldsToCheck = @(
     "userPrincipalName"
 )
 
+# Start Script
 try {
-    # Getting accessToken
-    $AccessToken = $Config.AzureAD | Get-LisaAccessToken
-
-    # Formatting Authorisation Headers
-    $AuthorizationHeaders = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $AuthorizationHeaders.Add("Authorization", "Bearer $($AccessToken)")
-    $AuthorizationHeaders.Add("Content-Type", "application/json")
-    $AuthorizationHeaders.Add("Mwp-Api-Version", "1.0")
+    # Formatting Headers and authentication for KPN Lisa Requests
+    $LisaRequest = @{
+        Authentication = "Bearer"
+        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        ContentType    = "application/json; charset=utf-8"
+        Headers        = @{
+            "Mwp-Api-Version" = "1.0"
+        }
+    }
 
     $SplatParams = @{
         Uri     = "$($Config.BaseUrl)/Users"
-        Headers = $AuthorizationHeaders
         Method  = 'get'
         Body    = @{
             filter = $Null
@@ -122,7 +127,7 @@ try {
     foreach ($Field in $FieldsToCheck) {
         $SplatParams.Body.filter = "$($Field) eq '$($Account.$Field)'"
 
-        $UserResponse = Invoke-RestMethod @SplatParams
+        $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
 
         if ($UserResponse.count -eq 0) {
             Write-Verbose -Verbose "$($Field) with value '$($Account.$Field)' is unique."

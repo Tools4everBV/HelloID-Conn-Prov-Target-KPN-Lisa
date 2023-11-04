@@ -113,9 +113,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LicenseProfiles"
-        Method  = 'Post'
-        body    = @{
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LicenseProfiles"
+        Method = 'Post'
+        body   = @{
             licenseProfileId = $personContext.References.Permission.Reference
         }
     }

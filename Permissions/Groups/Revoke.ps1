@@ -113,8 +113,8 @@ try {
     }
 
     $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups/$($personContext.References.Permission.Reference)"
-            Method  = 'Delete'
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups/$($personContext.References.Permission.Reference)"
+        Method = 'Delete'
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -136,8 +136,8 @@ try {
         Write-Verbose "Verifying that the group [$($personContext.References.Permission.Reference)] is removed" -Verbose
 
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups"
-            Method  = 'Get'
+            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups"
+            Method = 'Get'
         }
         $result = (Invoke-RestMethod @LisaRequest @SplatParams)
 

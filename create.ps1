@@ -127,9 +127,9 @@ try {
 
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users"
-            Method  = 'Get'
-            Body    = @{
+            Uri    = "$($Config.BaseUrl)/Users"
+            Method = 'Get'
+            Body   = @{
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
             }
         }
@@ -177,9 +177,9 @@ try {
         )
 
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users"
-            Method  = 'Post'
-            Body    = $Body
+            Uri    = "$($Config.BaseUrl)/Users"
+            Method = 'Post'
+            Body   = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -205,9 +205,9 @@ try {
         $Body.accountEnabled = $False
 
         $SplatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
-            Method  = 'Patch'
-            Body    = $Body
+            Uri    = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
+            Method = 'Patch'
+            Body   = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -220,9 +220,9 @@ try {
         # Set the manager
         if ($PersonContext.References.ManagerAccount) {
             $SplatParams = @{
-                Uri     = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
-                Method  = 'Put'
-                Body    = $PersonContext.References.ManagerAccount
+                Uri    = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
+                Method = 'Put'
+                Body   = $PersonContext.References.ManagerAccount
             }
 
             if (-Not ($ActionContext.DryRun -eq $True)) {

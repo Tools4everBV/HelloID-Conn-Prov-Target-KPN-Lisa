@@ -117,9 +117,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users"
-        Method  = 'get'
-        Body    = @{
+        Uri    = "$($Config.BaseUrl)/Users"
+        Method = 'get'
+        Body   = @{
             filter = $Null
         }
     }

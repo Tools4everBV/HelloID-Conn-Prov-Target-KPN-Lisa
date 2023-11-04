@@ -118,8 +118,8 @@ try {
 
     #Get previous account, select only $Account.Keys
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method  = 'Get'
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Method = 'Get'
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
@@ -128,9 +128,9 @@ try {
     Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
-        Method  = 'Patch'
-        Body    = $Account
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
+        Method = 'Patch'
+        Body   = $Account
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -146,8 +146,8 @@ try {
     # Updating manager
     if ($Null -eq $PersonContext.References.ManagerAccount) {
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
-            Method  = 'Delete'
+            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
+            Method = 'Delete'
         }
 
         # TODO:: validate return value on update and delete for manager
@@ -163,9 +163,9 @@ try {
     }
     else {
         $SplatParams = @{
-            Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
-            Method  = 'Put'
-            Body    = $PersonContext.References.ManagerAccount
+            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
+            Method = 'Put'
+            Body   = $PersonContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager

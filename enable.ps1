@@ -119,9 +119,9 @@ try {
     Write-Verbose -Verbose "Enable KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method  = 'Patch'
-        Body    = @{
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Method = 'Patch'
+        Body   = @{
             propertyName = "accountEnabled"
             value        = $True
         }

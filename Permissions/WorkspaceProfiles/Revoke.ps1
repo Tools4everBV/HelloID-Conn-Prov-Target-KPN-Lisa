@@ -113,8 +113,8 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/workspaceprofiles"
-        Method  = 'Delete'
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/workspaceprofiles"
+        Method = 'Delete'
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

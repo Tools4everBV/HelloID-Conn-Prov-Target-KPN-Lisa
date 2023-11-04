@@ -119,8 +119,8 @@ try {
     Write-Verbose -Verbose "Removing KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method  = 'Delete'
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Method = 'Delete'
     }
 
     try {

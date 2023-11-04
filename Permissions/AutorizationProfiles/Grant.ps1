@@ -113,9 +113,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/AuthorizationProfiles/$($personContext.References.Permission.Reference)/members"
-        Method  = 'Post'
-        body    =  $PersonContext.References.Account
+        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($personContext.References.Permission.Reference)/members"
+        Method = 'Post'
+        body   = $PersonContext.References.Account
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

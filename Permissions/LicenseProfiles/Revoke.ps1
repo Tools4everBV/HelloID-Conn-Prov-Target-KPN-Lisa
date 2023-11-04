@@ -113,8 +113,8 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LicenseProfiles/$($personContext.References.Permission.Reference)"
-        Method  = 'Delete'
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LicenseProfiles/$($personContext.References.Permission.Reference)"
+        Method = 'Delete'
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

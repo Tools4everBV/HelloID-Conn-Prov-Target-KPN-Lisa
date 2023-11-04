@@ -113,9 +113,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Licenses"
-        Method  = 'Post'
-        body    = @{
+        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Licenses"
+        Method = 'Post'
+        body   = @{
             skuId         = $personContext.References.Permission.Reference
             disabledPlans = @()
         }

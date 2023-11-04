@@ -79,9 +79,9 @@ function Get-LisaCollection {
         }
 
         $SplatParams = @{
-            Uri     = "$($Uri)/$($Endpoint)"
-            Method  = "Get"
-            Body    = @{
+            Uri    = "$($Uri)/$($Endpoint)"
+            Method = "Get"
+            Body   = @{
                 Top       = 999
                 SkipToken = $Null
             }

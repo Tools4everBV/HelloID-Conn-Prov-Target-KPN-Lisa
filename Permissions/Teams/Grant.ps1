@@ -113,9 +113,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri     = "$($Config.BaseUrl)/Teams/$($personContext.References.Permission.Reference)/members"
-        Method  = 'Post'
-        body    =  @{
+        Uri    = "$($Config.BaseUrl)/Teams/$($personContext.References.Permission.Reference)/members"
+        Method = 'Post'
+        body   = @{
             userId     = $PersonContext.References.Account
             memberRole = "Member" # Options [ Owner, Member, Guest ]
         }

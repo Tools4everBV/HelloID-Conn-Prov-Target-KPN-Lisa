@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -114,7 +114,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups/$($personContext.References.Permission.Reference)"
-        Method = 'Delete'
+        Method = "Delete"
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -124,7 +124,7 @@ try {
         catch {
             if ($PSItem -match "InvalidOperation") {
                 $InvalidOperation = $true   # Group not exists
-                Write-Verbose "$($PSItem.Errordetails.message)" -Verbose
+                Write-Verbose -Verbose "$($PSItem.Errordetails.message)"
             }
             else {
                 throw "Could not delete member from group, $($PSItem.Exception.Message) $($PSItem.Errordetails.message)".trim(" ")
@@ -133,11 +133,11 @@ try {
     }
 
     if ($InvalidOperation) {
-        Write-Verbose "Verifying that the group [$($personContext.References.Permission.Reference)] is removed" -Verbose
+        Write-Verbose -Verbose "Verifying that the group [$($personContext.References.Permission.Reference)] is removed"
 
         $SplatParams = @{
             Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups"
-            Method = 'Get'
+            Method = "Get"
         }
         $result = (Invoke-RestMethod @LisaRequest @SplatParams)
 

@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -120,7 +120,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method = 'Patch'
+        Method = "Patch"
         Body   = @{
             propertyName = "accountEnabled"
             value        = $False

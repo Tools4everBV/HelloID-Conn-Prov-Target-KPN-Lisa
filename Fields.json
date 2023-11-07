@@ -1,0 +1,236 @@
+[
+    {
+        "name": "businessPhones",
+        "description": null,
+        "type": 2,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 3,
+                "value": "function getValue() {\n    return [Person.Contact.Business.Phone.Mobile]\n}\n\ngetValue()",
+                "usedInNotifications": false,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "changePasswordNextSignIn",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1
+                ],
+                "mode": 3,
+                "value": "function getValue() {\n    return true\n}\n\ngetValue()",
+                "usedInNotifications": false,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "companyName",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.PrimaryContract.Organization.Name",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "department",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1
+                ],
+                "mode": 2,
+                "value": "Person.PrimaryContract.Department.DisplayName",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "displayName",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.DisplayName",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "employeeId",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.ExternalId",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "givenName",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.Name.NickName",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "jobTitle",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.PrimaryContract.Title.Name",
+                "usedInNotifications": true,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "mail",
+        "description": "Setting the mapping to 'None' will force the UPN in this field.",
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 0,
+                "value": "",
+                "usedInNotifications": false,
+                "storeInAccountData": true
+            }
+        ]
+    },
+    {
+        "name": "officeLocation",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 2,
+                "value": "Person.PrimaryContract.Department.DisplayName",
+                "usedInNotifications": true,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "preferredLanguage",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1
+                ],
+                "mode": 1,
+                "value": "nl",
+                "usedInNotifications": false,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "surName",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 3,
+                "value": "// Please enter the mapping logic to generate the lastName based on name convention.\nfunction generatelastName() {\n    let middleName = Person.Name.FamilyNamePrefix;\n    let lastName = Person.Name.FamilyName;\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\n    let lastNamePartner = Person.Name.FamilyNamePartner;\n    let convention = Person.Name.Convention;\n\n    // B\t    van den Boele\n    // BP\t    van den Boele - de Vries\n    // P\t    de Vries\n    // PB\t    de Vries - van den Boele\n\n    switch (convention) {\n        case \"B\":\n            nameFormatted = '';\n            if (typeof middleName !== 'undefined' && middleName) { nameFormatted = nameFormatted + ' ' + middleName }\n            nameFormatted = nameFormatted + ' ' + lastName;\n            break;\n        case \"BP\":\n            nameFormatted = '';\n            if (typeof middleName !== 'undefined' && middleName) { nameFormatted = nameFormatted + ' ' + middleName }\n            nameFormatted = nameFormatted + ' ' + lastName;\n\n            nameFormatted = nameFormatted + ' - ';\n\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { nameFormatted = nameFormatted + middleNamePartner + ' ' }\n            nameFormatted = nameFormatted + lastNamePartner;\n            break;\n        case \"P\":\n            nameFormatted = '';\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { nameFormatted = nameFormatted + ' ' + middleNamePartner }\n            nameFormatted = nameFormatted + ' ' + lastNamePartner;\n            break;\n        case \"PB\":\n            nameFormatted = '';\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { nameFormatted = nameFormatted + ' ' + middleNamePartner }\n            nameFormatted = nameFormatted + ' ' + lastNamePartner;\n\n            nameFormatted = nameFormatted + ' - ';\n\n            if (typeof middleName !== 'undefined' && middleName) { nameFormatted = nameFormatted + middleName + ' ' }\n            nameFormatted = nameFormatted + lastName;\n            break;\n        default:\n            nameFormatted = '';\n            if (typeof middleName !== 'undefined' && middleName) { nameFormatted = nameFormatted + ' ' + middleName }\n            nameFormatted = nameFormatted + ' ' + lastName;\n            break;\n    }\n    const lastNameFormatted = nameFormatted.trim();\n\n    return lastNameFormatted;\n}\n\ngeneratelastName();",
+                "usedInNotifications": false,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "usageLocation",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1
+                ],
+                "mode": 1,
+                "value": "NL",
+                "usedInNotifications": false,
+                "storeInAccountData": false
+            }
+        ]
+    },
+    {
+        "name": "userPrincipalName",
+        "description": null,
+        "type": 1,
+        "mappingActions": [
+            {
+                "entitlementActions": [
+                    1,
+                    3
+                ],
+                "mode": 3,
+                "value": "function generateUserPrincipalName() {\n\n    const domain = 'yourdomainhere';\n    const suffix = Iteration === 0 ? '' : Iteration;\n    \n    let firstName = Person.Name.NickName;\n    let middleName = Person.Name.FamilyNamePrefix;\n    let lastName = Person.Name.FamilyName;\n    \n    let userPrincipalName = firstName + '.';\n    //Check if the middleName variable contains data\n    if (typeof middleName !== 'undefined' && middleName) { userPrincipalName = userPrincipalName + middleName.replace(/\\s+/g, '.') + '.' }\n    userPrincipalName = userPrincipalName + lastName;\n    \n    //Remove blank chars\n    userPrincipalName = userPrincipalName.replace(/\\s/g,'');\n    \n    //Convert to lower case\n    userPrincipalName = userPrincipalName.toLowerCase();\n    \n    //Remove diacritical chars\n    userPrincipalName = deleteDiacriticalMarks(userPrincipalName);\n\n\t//Remove specific chars    \n    userPrincipalName = userPrincipalName.trim().replace(/[^0-9a-zA-Z.']/g, '');\n\n\tuserPrincipalName = userPrincipalName + suffix + '@' + domain;\n    \n    return userPrincipalName;\n}\n\ngenerateUserPrincipalName();",
+                "usedInNotifications": false,
+                "storeInAccountData": true
+            }
+        ]
+    }
+]

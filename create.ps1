@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -128,7 +128,7 @@ try {
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
             Uri    = "$($Config.BaseUrl)/Users"
-            Method = 'Get'
+            Method = "Get"
             Body   = @{
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
             }
@@ -165,40 +165,41 @@ try {
     # Create KPN Lisa Account
     if (-Not $OutputContext.AccountCorrelated) {
 
+        $CreationProperties = @(
+            "changePasswordNextSignIn", "usageLocation", "preferredLanguage",
+            "givenName", "surName", "displayName", "userPrincipalName"
+        )
+
         Write-Verbose -Verbose "Creating KPN Lisa account for '$($Person.DisplayName)'"
 
         if ($Account.PSobject.Properties.Name.Contains("mail") -and $Null -eq $Account.mail) {
             $Account.mail = $Account.userPrincipalName
         }
 
-        $Body = $Account | Select-Object @(
-            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
-            'givenName', 'surName', 'displayName', 'userPrincipalName'
-        )
+        $Body = $Account | Select-Object $CreationProperties
 
         $SplatParams = @{
             Uri    = "$($Config.BaseUrl)/Users"
-            Method = 'Post'
+            Method = "Post"
             Body   = $Body
         }
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
             $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
-
-            $OutputContext.AccountReference = $UserResponse.objectId
-            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue $UserResponse.temporaryPassword
         }
         else {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
-
-            $Account | Add-Member -NotePropertyName 'password' -NotePropertyValue "FakePassword"
         }
 
+        $OutputContext.AccountReference = $UserResponse.objectId
+
+        $Account | Add-Member -NotePropertyMembers @{
+            password = $UserResponse.temporaryPassword
+        } -Force
+
         #Update the user with all other props
-        $Body = $Account | Select-Object -Property *, 'accountEnabled' -ExcludeProperty @(
-            'changePasswordNextSignIn', 'usageLocation', 'preferredLanguage',
-            'givenName', 'surName', 'displayName', 'userPrincipalName',
-            'password'
+        $Body = $Account | Select-Object -Property *, "accountEnabled" -ExcludeProperty @(
+            $CreationProperties, "password"
         )
 
         # Force the account disabled
@@ -206,7 +207,7 @@ try {
 
         $SplatParams = @{
             Uri    = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
-            Method = 'Patch'
+            Method = "Patch"
             Body   = $Body
         }
 
@@ -221,7 +222,7 @@ try {
         if ($PersonContext.References.ManagerAccount) {
             $SplatParams = @{
                 Uri    = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
-                Method = 'Put'
+                Method = "Put"
                 Body   = $PersonContext.References.ManagerAccount
             }
 

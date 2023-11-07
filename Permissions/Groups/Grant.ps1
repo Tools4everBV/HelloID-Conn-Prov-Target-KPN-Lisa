@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -114,7 +114,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups"
-        Method = 'Post'
+        Method = "Post"
         body   = $personContext.References.Permission.Reference
     }
 
@@ -124,7 +124,7 @@ try {
         }
         catch {
             if ($PSItem -match "AlreadyMemberOfGroup") {
-                Write-Verbose "$($PSItem.Errordetails.message)" -Verbose
+                Write-Verbose -Verbose "$($PSItem.Errordetails.message)"
             }
             else {
                 throw "Could not add member to group, $($PSItem.Exception.Message) $($PSItem.Errordetails.message)".trim(" ")

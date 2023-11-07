@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -114,7 +114,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/LisaRoles/$($personContext.References.Permission.Reference)"
-        Method = 'Delete'
+        Method = "Delete"
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

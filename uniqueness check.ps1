@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -118,7 +118,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users"
-        Method = 'get'
+        Method = "Get"
         Body   = @{
             filter = $Null
         }

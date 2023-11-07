@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -114,7 +114,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Teams/$($personContext.References.Permission.Reference)/members"
-        Method = 'Post'
+        Method = "Post"
         body   = @{
             userId     = $PersonContext.References.Account
             memberRole = "Member" # Options [ Owner, Member, Guest ]

@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -119,7 +119,7 @@ try {
     #Get previous account, select only $Account.Keys
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method = 'Get'
+        Method = "Get"
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
@@ -129,7 +129,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
-        Method = 'Patch'
+        Method = "Patch"
         Body   = $Account
     }
 
@@ -147,7 +147,7 @@ try {
     if ($Null -eq $PersonContext.References.ManagerAccount) {
         $SplatParams = @{
             Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
-            Method = 'Delete'
+            Method = "Delete"
         }
 
         # TODO:: validate return value on update and delete for manager
@@ -164,7 +164,7 @@ try {
     else {
         $SplatParams = @{
             Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
-            Method = 'Put'
+            Method = "Put"
             Body   = $PersonContext.References.ManagerAccount
         }
 

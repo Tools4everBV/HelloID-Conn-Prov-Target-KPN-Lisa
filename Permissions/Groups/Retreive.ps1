@@ -67,7 +67,7 @@ function Get-LisaCollection {
     )
 
     try {
-        Write-Verbose 'Setting authorizationHeaders'
+        Write-Verbose -Verbose "Setting authorizationHeaders"
 
         $LisaRequest = @{
             Authentication = "Bearer"
@@ -143,7 +143,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -170,7 +170,7 @@ try {
 
     $OutputContext.Permissions = $Groups | ForEach-Object {
         [PSCustomObject]@{
-            DisplayName    = "Group - $($PSItem.DisplayName)"
+            DisplayName    = "$($PSItem.GroupType) - $($PSItem.DisplayName)"
             Identification = @{
                 Reference = $PSItem.id
             }

@@ -86,7 +86,7 @@ function Resolve-ErrorMessage {
         $Exception.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
             "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join ' '
+        ) -Join " "
 
         Write-Output $Exception
     }
@@ -120,7 +120,7 @@ try {
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
-        Method = 'Delete'
+        Method = "Delete"
     }
 
     try {
@@ -135,7 +135,7 @@ try {
             })
     }
     catch {
-        $StatusCode = $_.Exception.Response.StatusCode
+        $StatusCode = $PSItem.Exception.Response.StatusCode
 
         if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
             $AuditLogs.Add([PSCustomObject]@{
@@ -145,7 +145,7 @@ try {
                 })
         }
         else {
-            throw $_
+            throw $PSItem
         }
     }
 

@@ -104,6 +104,14 @@ $Manager = $PersonContext.Manager
 #endregion Aliasses
 
 
+# Hack for non updatable fields we like to return
+# @link: https://helloid.canny.io/provisioning/p/exportdata-in-powershell-v2
+$NonUpdatables = @(
+    "userPrincipalName"
+    "mail"
+)
+
+
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
@@ -123,14 +131,14 @@ try {
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
-    $OutputContext.PreviousData = $PreviousPerson | Select-Object $Account.PSObject.Properties.Name
+    $OutputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $Account.PSObject.Properties.Name)
 
     Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
         Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
         Method = "Patch"
-        Body   = $Account
+        Body   = $Account | Select-Object -Property * -ExcludeProperty $NonUpdatables
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {

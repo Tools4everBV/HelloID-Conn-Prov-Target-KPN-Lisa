@@ -94,18 +94,12 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$AuditLogs = $OutputContext.AuditLogs
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -113,7 +107,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($ActionContext.References.Permission.Reference)/members"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/AuthorizationProfiles/$($ActionContext.References.Permission.Reference)/members"
         Method = "Post"
         body   = $ActionContext.References.Account
     }
@@ -122,9 +116,9 @@ try {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams) #If 200 it returns a Empty String
     }
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission"
-            Message = "Permission $($ActionContext.References.Permission.Reference) added to account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
+            Message = "Permission $($ActionContext.References.Permission.Reference) added to account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -135,9 +129,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission" # Optionally specify a different action for this audit log
-            Message = "Failed to add permission $($ActionContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to add permission $($ActionContext.References.Permission.Reference) to account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

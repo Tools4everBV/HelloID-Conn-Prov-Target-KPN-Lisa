@@ -94,22 +94,12 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$Account = $OutputContext.Data
-$AuditLogs = $OutputContext.AuditLogs
-
-$Person = $PersonContext.Person
-$Manager = $PersonContext.Manager
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -127,7 +117,7 @@ try {
 
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
             Method = "Get"
             Body   = @{
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
@@ -144,13 +134,13 @@ try {
 
             $OutputContext.AccountReference = $CorrelatedAccount.id
 
-            $Account.PSObject.Properties | ForEach-Object {
+            $OutputContext.Data.PSObject.Properties | ForEach-Object {
                 if ($CorrelatedAccount.PSobject.Properties.Name.Contains($PSItem.Name)) {
-                    $Account.$($PSItem.Name) = $CorrelatedAccount.$($PSItem.Name)
+                    $OutputContext.Data.$($PSItem.Name) = $CorrelatedAccount.$($PSItem.Name)
                 }
             }
 
-            $AuditLogs.Add([PSCustomObject]@{
+            $OutputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "CorrelateAccount" # Optionally specify a different action for this audit log
                     Message = "Correlated account with username $($CorrelatedAccount.UserName) on field $($CorrelationField) with value $($CorrelationValue)"
                     IsError = $False
@@ -170,16 +160,16 @@ try {
             "givenName", "surName", "displayName", "userPrincipalName"
         )
 
-        Write-Verbose -Verbose "Creating KPN Lisa account for '$($Person.DisplayName)'"
+        Write-Verbose -Verbose "Creating KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
 
-        if ($Account.PSobject.Properties.Name.Contains("mail") -and $Null -eq $Account.mail) {
-            $Account.mail = $Account.userPrincipalName
+        if ($OutputContext.Data.PSobject.Properties.Name.Contains("mail") -and $Null -eq $OutputContext.Data.mail) {
+            $OutputContext.Data.mail = $OutputContext.Data.userPrincipalName
         }
 
-        $Body = $Account | Select-Object $CreationProperties
+        $Body = $OutputContext.Data | Select-Object $CreationProperties
 
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
             Method = "Post"
             Body   = $Body
         }
@@ -193,12 +183,12 @@ try {
 
         $OutputContext.AccountReference = $UserResponse.objectId
 
-        $Account | Add-Member -NotePropertyMembers @{
+        $OutputContext.Data | Add-Member -NotePropertyMembers @{
             password = $UserResponse.temporaryPassword
         } -Force
 
         #Update the user with all other props
-        $Body = $Account | Select-Object -Property *, "accountEnabled" -ExcludeProperty @(
+        $Body = $OutputContext.Data | Select-Object -Property *, "accountEnabled" -ExcludeProperty @(
             $CreationProperties, "password"
         )
 
@@ -206,7 +196,7 @@ try {
         $Body.accountEnabled = $False
 
         $SplatParams = @{
-            Uri    = "$($config.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
             Method = "Patch"
             Body   = $Body
         }
@@ -218,16 +208,16 @@ try {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
         }
 
-        $AuditLogs.Add([PSCustomObject]@{
+        $OutputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
+                Message = "Created account for '$($PersonContext.Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
                 IsError = $False
             })
 
         # Set the manager
         if ($ActionContext.References.ManagerAccount) {
             $SplatParams = @{
-                Uri    = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
+                Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
                 Method = "Put"
                 Body   = $ActionContext.References.ManagerAccount
             }
@@ -236,9 +226,9 @@ try {
                 [void] (Invoke-RestMethod @LisaRequest @SplatParams)
             }
 
-            $AuditLogs.Add([PSCustomObject]@{
+            $OutputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                    Message = "Added Manager $($Manager.displayName) to '$($Person.DisplayName)'"
+                    Message = "Added Manager $($PersonContext.Manager.displayName) to '$($PersonContext.Person.DisplayName)'"
                     IsError = $False
                 })
         }
@@ -251,9 +241,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "CreateAccount" # Optionally specify a different action for this audit log
-            Message = "Error creating account [$($Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error creating account [$($PersonContext.Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

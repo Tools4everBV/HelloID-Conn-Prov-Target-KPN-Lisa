@@ -94,32 +94,22 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$Account = $OutputContext.Data
-$AuditLogs = $OutputContext.AuditLogs
-
-$Person = $PersonContext.Person
-$Manager = $PersonContext.Manager
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    Write-Verbose -Verbose "Removing KPN Lisa account for '$($Person.DisplayName)'"
+    Write-Verbose -Verbose "Removing KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Delete"
     }
 
@@ -128,7 +118,7 @@ try {
             [void] (Invoke-RestMethod @LisaRequest @splatParams)
         }
 
-        $AuditLogs.Add([PSCustomObject]@{
+        $OutputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                 Message = "Account for '$($p.DisplayName)' is deleted"
                 IsError = $False
@@ -138,7 +128,7 @@ try {
         $StatusCode = $PSItem.Exception.Response.StatusCode
 
         if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
-            $AuditLogs.Add([PSCustomObject]@{
+            $OutputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                     Message = "Account for '$($p.DisplayName)' doesn't exist, mark as deleted"
                     IsError = $False
@@ -156,9 +146,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Error deleting account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error deleting account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

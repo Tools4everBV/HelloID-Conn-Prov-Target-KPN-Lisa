@@ -94,32 +94,22 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$Account = $OutputContext.Data
-$AuditLogs = $OutputContext.AuditLogs
-
-$Person = $PersonContext.Person
-$Manager = $PersonContext.Manager
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    Write-Verbose -Verbose "Disable KPN Lisa account for '$($Person.DisplayName)'"
+    Write-Verbose -Verbose "Disable KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Patch"
         Body   = @{
             propertyName = "accountEnabled"
@@ -131,9 +121,9 @@ try {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount"
-            Message = "Account for '$($Person.DisplayName)' is disabled"
+            Message = "Account for '$($PersonContext.Person.DisplayName)' is disabled"
             IsError = $False
         })
 
@@ -144,9 +134,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount" # Optionally specify a different action for this audit log
-            Message = "Error disabling account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error disabling account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

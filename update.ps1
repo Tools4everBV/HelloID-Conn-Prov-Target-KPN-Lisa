@@ -94,16 +94,6 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$Account = $OutputContext.Data
-$AuditLogs = $OutputContext.AuditLogs
-
-$Person = $PersonContext.Person
-$Manager = $PersonContext.Manager
-#endregion Aliasses
-
-
 # Hack for non updatable fields we like to return
 # @link: https://helloid.canny.io/provisioning/p/exportdata-in-powershell-v2
 $NonUpdatables = @(
@@ -117,44 +107,44 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    #Get previous account, select only $Account.Keys
+    #Get previous account, select only $OutputContext.Data.Keys
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Get"
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
-    $OutputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $Account.PSObject.Properties.Name)
+    $OutputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $OutputContext.Data.PSObject.Properties.Name)
 
-    Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
+    Write-Verbose -Verbose "Updating KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/bulk"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/bulk"
         Method = "Patch"
-        Body   = $Account | Select-Object -Property * -ExcludeProperty $NonUpdatables
+        Body   = $OutputContext.Data | Select-Object -Property * -ExcludeProperty $NonUpdatables
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($Person.DisplayName)' Updated. ObjectId: '$($ActionContext.References.Account)'"
+            Message = "Account for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($ActionContext.References.Account)'"
             IsError = $False
         })
 
     # Updating manager
     if ($Null -eq $ActionContext.References.ManagerAccount) {
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/manager"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/manager"
             Method = "Delete"
         }
 
@@ -163,15 +153,15 @@ try {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
-        $AuditLogs.Add([PSCustomObject]@{
+        $OutputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
+                Message = "Manager for '$($PersonContext.Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }
     else {
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/Manager"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/Manager"
             Method = "Put"
             Body   = $ActionContext.References.ManagerAccount
         }
@@ -181,9 +171,9 @@ try {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
-        $AuditLogs.Add([PSCustomObject]@{
+        $OutputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
+                Message = "Manager for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }
@@ -195,9 +185,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error updating account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

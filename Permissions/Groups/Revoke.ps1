@@ -94,18 +94,12 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$AuditLogs = $OutputContext.AuditLogs
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -113,7 +107,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/groups/$($ActionContext.References.Permission.Reference)"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups/$($ActionContext.References.Permission.Reference)"
         Method = "Delete"
     }
 
@@ -136,7 +130,7 @@ try {
         Write-Verbose -Verbose "Verifying that the group [$($ActionContext.References.Permission.Reference)] is removed"
 
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
             Method = "Get"
         }
         $result = (Invoke-RestMethod @LisaRequest @SplatParams)
@@ -146,9 +140,9 @@ try {
         }
     }
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission"
-            Message = "Group Permission $($ActionContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
+            Message = "Group Permission $($ActionContext.References.Permission.Reference) removed from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -159,9 +153,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove Group permission $($ActionContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to remove Group permission $($ActionContext.References.Permission.Reference) from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

@@ -71,7 +71,7 @@ function Get-LisaCollection {
 
         $LisaRequest = @{
             Authentication = "Bearer"
-            Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+            Token          = $AccessToken
             ContentType    = "application/json; charset=utf-8"
             Headers        = @{
                 "Mwp-Api-Version" = "1.0"
@@ -151,18 +151,13 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-#endregion Aliasses
-
-
 # Start Script
 try {
     # Getting accessToken
-    $AccessToken = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+    $AccessToken = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
-        Uri         = $Config.BaseUrl
+        Uri         = $ActionContext.Configuration.BaseUrl
         Endpoint    = "Licenses"
         AccessToken = $AccessToken
     }

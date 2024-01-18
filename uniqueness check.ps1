@@ -94,22 +94,17 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-#region Aliasses
-$Config = $ActionContext.Configuration
-$Account = $ActionContext.Data
-#endregion Aliasses
-
-
 $FieldsToCheck = @(
     "userPrincipalName"
 )
+
 
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $Config.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -117,7 +112,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users"
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
         Method = "Get"
         Body   = @{
             filter = $Null
@@ -125,15 +120,15 @@ try {
     }
 
     foreach ($Field in $FieldsToCheck) {
-        $SplatParams.Body.filter = "$($Field) eq '$($Account.$Field)'"
+        $SplatParams.Body.filter = "$($Field) eq '$($ActionContext.Data.$Field)'"
 
         $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
 
         if ($UserResponse.count -eq 0) {
-            Write-Verbose -Verbose "$($Field) with value '$($Account.$Field)' is unique."
+            Write-Verbose -Verbose "$($Field) with value '$($ActionContext.Data.$Field)' is unique."
         }
         else {
-            Write-Verbose -Verbose "$($Field) with value '$($Account.$Field)' already exists."
+            Write-Verbose -Verbose "$($Field) with value '$($ActionContext.Data.$Field)' already exists."
 
             $OutputContext.NonUniqueFields.Add($Field)
         }
@@ -145,5 +140,5 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    Write-Error "Error creating account [$($Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
+    Write-Error "Error creating account [$($PersonContext.Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
 }

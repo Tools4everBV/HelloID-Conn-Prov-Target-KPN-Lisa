@@ -113,7 +113,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/workspaceprofiles"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/workspaceprofiles"
         Method = "Delete"
     }
 
@@ -123,7 +123,7 @@ try {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission"
-            Message = "LicenseProfile Permission $($personContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            Message = "LicenseProfile Permission $($ActionContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -136,7 +136,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove LicenseProfile permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to remove LicenseProfile permission $($ActionContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

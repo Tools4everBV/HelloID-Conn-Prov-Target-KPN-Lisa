@@ -119,7 +119,7 @@ try {
     Write-Verbose -Verbose "Disable KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Patch"
         Body   = @{
             propertyName = "accountEnabled"
@@ -146,7 +146,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount" # Optionally specify a different action for this audit log
-            Message = "Error disabling account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error disabling account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

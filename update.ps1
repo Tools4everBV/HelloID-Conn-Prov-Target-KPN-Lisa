@@ -126,7 +126,7 @@ try {
 
     #Get previous account, select only $Account.Keys
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Get"
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
@@ -136,7 +136,7 @@ try {
     Write-Verbose -Verbose "Updating KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/bulk"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/bulk"
         Method = "Patch"
         Body   = $Account | Select-Object -Property * -ExcludeProperty $NonUpdatables
     }
@@ -147,14 +147,14 @@ try {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($Person.DisplayName)' Updated. ObjectId: '$($PersonContext.References.Account)'"
+            Message = "Account for '$($Person.DisplayName)' Updated. ObjectId: '$($ActionContext.References.Account)'"
             IsError = $False
         })
 
     # Updating manager
-    if ($Null -eq $PersonContext.References.ManagerAccount) {
+    if ($Null -eq $ActionContext.References.ManagerAccount) {
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/manager"
+            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/manager"
             Method = "Delete"
         }
 
@@ -171,9 +171,9 @@ try {
     }
     else {
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Manager"
+            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/Manager"
             Method = "Put"
-            Body   = $PersonContext.References.ManagerAccount
+            Body   = $ActionContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager
@@ -197,7 +197,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error updating account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

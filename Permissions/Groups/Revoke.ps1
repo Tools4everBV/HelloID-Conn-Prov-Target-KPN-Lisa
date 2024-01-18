@@ -113,7 +113,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups/$($personContext.References.Permission.Reference)"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/groups/$($ActionContext.References.Permission.Reference)"
         Method = "Delete"
     }
 
@@ -133,22 +133,22 @@ try {
     }
 
     if ($InvalidOperation) {
-        Write-Verbose -Verbose "Verifying that the group [$($personContext.References.Permission.Reference)] is removed"
+        Write-Verbose -Verbose "Verifying that the group [$($ActionContext.References.Permission.Reference)] is removed"
 
         $SplatParams = @{
-            Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/groups"
+            Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
             Method = "Get"
         }
         $result = (Invoke-RestMethod @LisaRequest @SplatParams)
 
-        if ($personContext.References.Permission.Reference -in $result.value.id) {
-            throw "Group [$($personContext.References.Permission.Reference)] is not removed"
+        if ($ActionContext.References.Permission.Reference -in $result.value.id) {
+            throw "Group [$($ActionContext.References.Permission.Reference)] is not removed"
         }
     }
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission"
-            Message = "Group Permission $($personContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            Message = "Group Permission $($ActionContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -161,7 +161,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove Group permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to remove Group permission $($ActionContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

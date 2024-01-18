@@ -119,7 +119,7 @@ try {
     Write-Verbose -Verbose "Removing KPN Lisa account for '$($Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)"
         Method = "Delete"
     }
 
@@ -158,7 +158,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Error deleting account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error deleting account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

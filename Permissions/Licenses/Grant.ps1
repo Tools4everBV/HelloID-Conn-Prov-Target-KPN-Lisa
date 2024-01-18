@@ -113,10 +113,10 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/Users/$($PersonContext.References.Account)/Licenses"
+        Uri    = "$($Config.BaseUrl)/Users/$($ActionContext.References.Account)/Licenses"
         Method = "Post"
         body   = @{
-            skuId         = $personContext.References.Permission.Reference
+            skuId         = $ActionContext.References.Permission.Reference
             disabledPlans = @()
         }
     }
@@ -127,7 +127,7 @@ try {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission"
-            Message = "Permission $($personContext.References.Permission.Reference) added to account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            Message = "Permission $($ActionContext.References.Permission.Reference) added to account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -140,7 +140,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission" # Optionally specify a different action for this audit log
-            Message = "Failed to add permission $($personContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to add permission $($ActionContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

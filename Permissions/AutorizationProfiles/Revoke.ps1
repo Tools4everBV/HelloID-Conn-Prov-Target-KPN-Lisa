@@ -113,7 +113,7 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($personContext.References.Permission.Reference)/members/$($PersonContext.References.Account)"
+        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($ActionContext.References.Permission.Reference)/members/$($ActionContext.References.Account)"
         Method = "Delete"
     }
 
@@ -123,7 +123,7 @@ try {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission"
-            Message = "Permission $($personContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            Message = "Permission $($ActionContext.References.Permission.Reference) removed from account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -136,7 +136,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove permission $($personContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to remove permission $($ActionContext.References.Permission.Reference) from account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

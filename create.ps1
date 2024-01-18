@@ -122,7 +122,7 @@ try {
         $CorrelationValue = $ActionContext.CorrelationConfiguration.PersonFieldValue
 
         if ($Null -eq $CorrelationField -or $Null -eq $CorrelationValue) {
-            Write-Warning "Correlation is enabled but not configured correctly."
+            throw "Correlation is enabled but not configured correctly."
         }
 
         #  Write logic here that checks if the account can be correlated in the target system
@@ -218,26 +218,30 @@ try {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
         }
 
+        $AuditLogs.Add([PSCustomObject]@{
+                Action  = "CreateAccount" # Optionally specify a different action for this audit log
+                Message = "Created account for '$($Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
+                IsError = $False
+            })
+
         # Set the manager
-        if ($PersonContext.References.ManagerAccount) {
+        if ($ActionContext.References.ManagerAccount) {
             $SplatParams = @{
                 Uri    = "$($Config.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
                 Method = "Put"
-                Body   = $PersonContext.References.ManagerAccount
+                Body   = $ActionContext.References.ManagerAccount
             }
 
             if (-Not ($ActionContext.DryRun -eq $True)) {
                 [void] (Invoke-RestMethod @LisaRequest @SplatParams)
             }
 
-            Write-Verbose -Verbose "Added Manager $($Manager.displayName) to '$($Person.DisplayName)'"
+            $AuditLogs.Add([PSCustomObject]@{
+                    Action  = "CreateAccount" # Optionally specify a different action for this audit log
+                    Message = "Added Manager $($Manager.displayName) to '$($Person.DisplayName)'"
+                    IsError = $False
+                })
         }
-
-        $AuditLogs.Add([PSCustomObject]@{
-                Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
-                IsError = $False
-            })
 
         $OutputContext.Success = $True
     }

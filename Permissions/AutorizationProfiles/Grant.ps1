@@ -113,9 +113,9 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($personContext.References.Permission.Reference)/members"
+        Uri    = "$($Config.BaseUrl)/AuthorizationProfiles/$($ActionContext.References.Permission.Reference)/members"
         Method = "Post"
-        body   = $PersonContext.References.Account
+        body   = $ActionContext.References.Account
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
@@ -124,7 +124,7 @@ try {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission"
-            Message = "Permission $($personContext.References.Permission.Reference) added to account [$($Person.DisplayName) ($($PersonContext.References.Account))]"
+            Message = "Permission $($ActionContext.References.Permission.Reference) added to account [$($Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
 
@@ -137,7 +137,7 @@ catch {
 
     $AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission" # Optionally specify a different action for this audit log
-            Message = "Failed to add permission $($personContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($PersonContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to add permission $($ActionContext.References.Permission.Reference) to account [$($Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

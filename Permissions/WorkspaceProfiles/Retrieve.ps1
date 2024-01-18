@@ -163,13 +163,15 @@ try {
     }
     $WorkspaceProfiles = Get-LisaCollection @SplatParams
 
-    $OutputContext.Permissions = $WorkspaceProfiles | ForEach-Object {
-        [PSCustomObject]@{
-            DisplayName    = "WorkspaceProfile - $($PSItem.friendlyDisplayName)"
-            Identification = @{
-                Reference = $PSItem.workspaceProfileId
-            }
-        }
+    $WorkspaceProfiles | ForEach-Object {
+        $DisplayName = "WorkspaceProfile - $($PSItem.friendlyDisplayName)"
+
+        $OutputContext.Permissions.Add([PSCustomObject]@{
+                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
+                Identification = @{
+                    Reference = $PSItem.workspaceProfileId
+                }
+            })
     }
 }
 catch {

@@ -176,12 +176,13 @@ try {
 
         if (-Not ($ActionContext.DryRun -eq $True)) {
             $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
+            $OutputContext.AccountReference = $UserResponse.objectId
         }
         else {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
+            $OutputContext.AccountReference = 'unknown'
         }
 
-        $OutputContext.AccountReference = $UserResponse.objectId
 
         $OutputContext.Data | Add-Member -NotePropertyMembers @{
             password = $UserResponse.temporaryPassword

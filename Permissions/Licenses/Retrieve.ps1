@@ -163,13 +163,15 @@ try {
     }
     $Licenses = Get-LisaCollection @SplatParams
 
-    $OutputContext.Permissions = $Licenses | ForEach-Object {
-        [PSCustomObject]@{
-            DisplayName    = "License - $($PSItem.DisplayName)"
-            Identification = @{
-                Reference = $PSItem.skuId
-            }
-        }
+    $Licenses | ForEach-Object {
+        $DisplayName = "License - $($PSItem.DisplayName)"
+
+        $OutputContext.Permissions.Add([PSCustomObject]@{
+                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
+                Identification = @{
+                    Reference = $PSItem.skuId
+                }
+            })
     }
 }
 catch {

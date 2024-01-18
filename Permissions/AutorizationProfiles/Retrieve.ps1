@@ -163,13 +163,15 @@ try {
     }
     $AuthorizationProfiles = Get-LisaCollection @SplatParams
 
-    $OutputContext.Permissions = $AuthorizationProfiles | ForEach-Object {
-        [PSCustomObject]@{
-            DisplayName    = "AuthorizationProfile - $($PSItem.displayName)"
-            Identification = @{
-                Reference = $PSItem.id
-            }
-        }
+    $AuthorizationProfiles | ForEach-Object {
+        $DisplayName = "AuthorizationProfile - $($PSItem.displayName)"
+
+        $OutputContext.Permissions.Add([PSCustomObject]@{
+                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
+                Identification = @{
+                    Reference = $PSItem.id
+                }
+            })
     }
 }
 catch {

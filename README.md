@@ -28,15 +28,20 @@ Repository for HelloID Provisioning Target Connector to AFAS Employees
 
 ## Table of contents
 
-- [Introduction](#Introduction)
-- [Getting started](#Getting-started)
-  + [Connection settings](#Connection-settings)
-  + [Prerequisites](#Prerequisites)
-  + [Remarks](#Remarks)
-- [Setup the connector](Setup-The-Connector)
-- [Getting help](Getting-help)
-- [Contributing](Contributing)
-- [Code Contributors](Code-Contributors)
+- [Introduction](#introduction)
+- [Getting started](#getting-started)
+- [Connection settings](#connection-settings)
+- [Prerequisites](#prerequisites)
+- [Remarks](#remarks)
+- [Contents](#contents)
+    - [Create](#create)
+    - [Update](#update)
+    - [Permission: Workspace Profile](#permission-workspace-profile)
+- [KPN Lisa Docs](#kpn-lisa-docs)
+- [Setup the connector](#setup-the-connector)
+- [Getting help](#getting-help)
+- [HelloID Docs](#helloid-docs)
+
 
 ## Introduction
 
@@ -68,12 +73,14 @@ The following settings are required to connect to the API.
 ### Remarks
 
 - When a new user is created in KPN Lisa, a default password is generated automatically by KPN Lisa. That password will also be returned in the response. At this point that password is not send back to HelloID.
-- The WorkspaceProfile is added hardcoded in the account create.ps1 as a recommendation from the supplier. Because its uncommon that an account needs a different WorkspaceProfile. When a different WorkspaceProfile is required they can request a self-service request to KPN. Or we must change the connector and manage the WorkspaceProfiles as Permissions.
-- The workspace profile is exclusively added when the account is created. The workspace profile will not be added on a account correlation
 
 ### Contents
 
-This connector tries to omit all the person privisioning actions to the target system, some specialties will me marked below.
+This connector tries to catch all the person provisioning actions to the target system, some specialties will me highlighted below.
+
+#### Correlation
+
+correlation will match the value of the person field to the account correlation field name in the target system. Both fields need to be selected in the correlation configuration screen.
 
 #### Create
 
@@ -90,7 +97,7 @@ The Create/Update account performs multiple web calls to creating and modifying 
 
 #### Permission: Workspace Profile
 
-A User can only have one Workspaceprofile, so be careful not to add multiple profiles to a user. The return will remove whatever workspaceProfile is active at the moment. This can result in unwanted behaviour.
+A User can only have one Workspaceprofile, so be careful not to add multiple profiles to a user as this will overwrite previously granted profiles. The return will remove whatever workspaceProfile is active at the moment. This can result in unwanted behaviour.
 
 ## KPN Lisa Docs
 

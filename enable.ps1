@@ -1,138 +1,142 @@
-#####################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Enable
-#
-# Version: 1.0.0.0
-#####################################################
-$VerbosePreference = "Continue"
-
-# Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$personObj = $person | ConvertFrom-Json
-$aRef = $accountReference | ConvertFrom-Json
-$success = $false
-
-#Region internal functions
+#region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [string]
-        $Scope
+        $Scope,
+
+        [Parameter()]
+        [switch]
+        $AsSecureString
     )
 
     try {
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Content-Type", "application/x-www-form-urlencoded")
-
-        $body = @{
-            grant_type    = "client_credentials"
-            client_id     = $ClientId
-            client_secret = $ClientSecret
-            scope         = $Scope
+        $SplatParams = @{
+            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
+            ContentType = "application/x-www-form-urlencoded"
+            Method      = "Post"
+            Body        = @{
+                grant_type    = "client_credentials"
+                client_id     = $ClientId
+                client_secret = $ClientSecret
+                scope         = $Scope
+            }
         }
+        $Response = Invoke-RestMethod @SplatParams
 
-        $splatRestMethodParameters = @{
-            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
-            Method  = 'POST'
-            Headers = $headers
-            Body    = $body
-        }
-        Invoke-RestMethod @splatRestMethodParameters
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($_)
-    }
-}
-
-function Resolve-HTTPError {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory,
-            ValueFromPipeline
-        )]
-        [object]$ErrorObject
-    )
-    process {
-        $HttpErrorObj = @{
-            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            InvocationInfo        = $ErrorObject.InvocationInfo.MyCommand
-            TargetObject          = $ErrorObject.TargetObject.RequestUri
-        }
-        if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
-            $HttpErrorObj['ErrorMessage'] = $ErrorObject.ErrorDetails.Message
-        }
-        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj['ErrorMessage'] = $errorResponse
-        }
-        Write-Output "'$($HttpErrorObj.ErrorMessage)', TargetObject: '$($HttpErrorObj.TargetObject), InvocationCommand: '$($HttpErrorObj.InvocationInfo)"
-    }
-}
-#EndRegion
-
-if (-not($dryRun -eq $true)) {
-    try {
-        Write-Verbose 'Getting accessToken'
-        $splatGetTokenParams = @{
-            TenantId     = $config.TenantId
-            ClientId     = $config.ClientId
-            ClientSecret = $config.ClientSecret
-            Scope        = $config.Scope
-        }
-
-        $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
-        $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
-        $authorizationHeaders.Add("Content-Type", "application/json")
-        $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
-
-        Write-Verbose "Enable KPN Lisa account for '$($personObj.DisplayName)'"
-        $splatParams = @{
-            Uri     = "$($config.BaseUrl)/Users/$aRef"
-            Method  = 'PATCH'
-            Headers = $authorizationHeaders
-            Body    = [PSCustomObject]@{
-                propertyName = "accountEnabled"
-                value        = $true
-            } | ConvertTo-Json
-
-        }
-        $null = Invoke-RestMethod @splatParams
-        $success = $true
-        $auditMessage = "Account for '$($personObj.DisplayName)' is enabled"
-    }
-    catch {
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorMessage = Resolve-HTTPError -Error $ex
-            $auditMessage = "Account for '$($personObj.DisplayName)' not enabled. Error: $errorMessage"
+        if ($AsSecureString) {
+            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
         }
         else {
-            $auditMessage = "Account for '$($personObj.DisplayName)' not enabled. Error: $($ex.Exception.Message)"
+            Write-Output ($Response.access_token)
         }
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
-$result = [PSCustomObject]@{
-    Success          = $success
-    Account          = $account
-    AccountReference = $aRef
-    AuditDetails     = $auditMessage
-}
 
-Write-Output $result | ConvertTo-Json -Depth 10
+function Resolve-ErrorMessage {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object]
+        $ErrorObject
+    )
+
+    process {
+        $Exception = [PSCustomObject]@{
+            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
+            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
+            RequestUri            = $ErrorObject.TargetObject.RequestUri
+            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
+            ErrorMessage          = $Null
+            VerboseErrorMessage   = $Null
+        }
+
+        switch ($ErrorObject.Exception.GetType().FullName) {
+            "Microsoft.PowerShell.Commands.HttpResponseException" {
+                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
+                break
+            }
+            "System.Net.WebException" {
+                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
+                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                break
+            }
+            default {
+                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+            }
+        }
+
+        $Exception.VerboseErrorMessage = @(
+            "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
+            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
+        ) -Join " "
+
+        Write-Output $Exception
+    }
+}
+#endregion functions
+
+
+# Start Script
+try {
+    # Formatting Headers and authentication for KPN Lisa Requests
+    $LisaRequest = @{
+        Authentication = "Bearer"
+        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        ContentType    = "application/json; charset=utf-8"
+        Headers        = @{
+            "Mwp-Api-Version" = "1.0"
+        }
+    }
+
+    Write-Verbose -Verbose "Enable KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+
+    $SplatParams = @{
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Method = "Patch"
+        Body   = @{
+            propertyName = "accountEnabled"
+            value        = $True
+        }
+    }
+
+    if (-Not ($ActionContext.DryRun -eq $True)) {
+        [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+    }
+
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = "EnableAccount"
+            Message = "Account for '$($PersonContext.Person.DisplayName)' is enabled"
+            IsError = $False
+        })
+
+    $OutputContext.Success = $True
+}
+catch {
+    $Exception = $PSItem | Resolve-ErrorMessage
+
+    Write-Verbose -Verbose $Exception.VerboseErrorMessage
+
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = "EnableAccount" # Optionally specify a different action for this audit log
+            Message = "Error enabling account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            IsError = $True
+        })
+}

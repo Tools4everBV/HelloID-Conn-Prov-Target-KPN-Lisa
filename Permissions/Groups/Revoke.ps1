@@ -94,14 +94,6 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-# Hack for non updatable fields we like to return
-# @link: https://helloid.canny.io/provisioning/p/exportdata-in-powershell-v2
-$NonUpdatables = @(
-    "userPrincipalName"
-    "mail"
-)
-
-
 # Start Script
 try {
     # Formatting Headers and authentication for KPN Lisa Requests
@@ -114,69 +106,45 @@ try {
         }
     }
 
-    #Get previous account, select only $OutputContext.Data.Keys
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
-        Method = "Get"
-    }
-    $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
-
-    $OutputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $OutputContext.Data.PSObject.Properties.Name)
-
-    Write-Verbose -Verbose "Updating KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
-
-    $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/bulk"
-        Method = "Patch"
-        Body   = $OutputContext.Data | Select-Object -Property * -ExcludeProperty $NonUpdatables
+        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups/$($ActionContext.References.Permission.Reference)"
+        Method = "Delete"
     }
 
     if (-Not ($ActionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+        try {
+            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+        }
+        catch {
+            if ($PSItem -match "InvalidOperation") {
+                $InvalidOperation = $true   # Group not exists
+                Write-Verbose -Verbose "$($PSItem.Errordetails.message)"
+            }
+            else {
+                throw "Could not delete member from group, $($PSItem.Exception.Message) $($PSItem.Errordetails.message)".trim(" ")
+            }
+        }
+    }
+
+    if ($InvalidOperation) {
+        Write-Verbose -Verbose "Verifying that the group [$($ActionContext.References.Permission.Reference)] is removed"
+
+        $SplatParams = @{
+            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
+            Method = "Get"
+        }
+        $result = (Invoke-RestMethod @LisaRequest @SplatParams)
+
+        if ($ActionContext.References.Permission.Reference -in $result.value.id) {
+            throw "Group [$($ActionContext.References.Permission.Reference)] is not removed"
+        }
     }
 
     $OutputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($ActionContext.References.Account)'"
+            Action  = "RevokePermission"
+            Message = "Group Permission $($ActionContext.References.Permission.Reference) removed from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]"
             IsError = $False
         })
-
-    # Updating manager
-    if ($Null -eq $ActionContext.References.ManagerAccount) {
-        $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/manager"
-            Method = "Delete"
-        }
-
-        # TODO:: validate return value on update and delete for manager
-        if (-Not ($ActionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
-        }
-
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
-                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($PersonContext.Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
-                IsError = $False
-            })
-    }
-    else {
-        $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/Manager"
-            Method = "Put"
-            Body   = $ActionContext.References.ManagerAccount
-        }
-
-        # TODO:: validate return value on update and delete for manager
-        if (-Not ($ActionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
-        }
-
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
-                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
-                IsError = $False
-            })
-    }
 
     $OutputContext.Success = $True
 }
@@ -186,8 +154,8 @@ catch {
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
     $OutputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Action  = "RevokePermission" # Optionally specify a different action for this audit log
+            Message = "Failed to remove Group permission $($ActionContext.References.Permission.Reference) from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

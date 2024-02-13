@@ -19,7 +19,6 @@ Repository for HelloID Provisioning Target Connector to AFAS Employees
 > [!WARNING]
 > This script is for the new powershell connector. Make sure to use the mapping and correlation keys like mentionded in this readme. For more information, please read our [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems.html)
 
-
 > [!NOTE]
 > This repository contains the connector and configuration code only. The implementer is responsible to acquire the connection details such as username, password, certificate, etc. You might even need to sign a contract or agreement with the supplier before implementing this connector. Please contact the client's application manager to coordinate the connector requirements.
 
@@ -63,6 +62,7 @@ The following settings are required to connect to the API.
 
 - An App registration in Azure to be used by KPN Lisa.
 
+> [!NOTE]
 > The _HelloID-Conn-Prov-Target-KPNLisa_ connector is built for PowerShell Core 7. This means the connector can be executed using the cloud HelloID agent.
 
 ### Remarks
@@ -73,33 +73,28 @@ The following settings are required to connect to the API.
 
 ### Contents
 
-| Files | Description |
-| ----- | ----------- |
-| create.ps1 | Creates or Correlates the account plus additional actions _(see below)_|
-| update.ps1 | Update the account which additional actions _(see below)_ |
-| enable.ps1 | Enables the account |
-| disable.ps1 | Disabale the account |
-| delete.ps1 | Deletes the account |
-| entitlementsGroups.ps1 | Retrieves the groups |
-| grantPermissionGroup.ps1 | Grant a group to an Account |
-| revokePermissionGroup.ps1 | Revokes a group from an Account |
-| entitlementsLicenseProfiles.ps1 | Retrieves the LicenseProfile |
-| grantPermissionLicenseProfiles.ps1 | Grant a LicenseProfiles to an Account |
-| revokePermissionLicenseProfiles.ps1 | Revokes a LicenseProfile from an Account |
+This connector tries to omit all the person privisioning actions to the target system, some specialties will me marked below.
 
-##### Create
+#### Create
 
-  The Create/Update account performs multiple web calls to creating and modifying the Account. When one of the web calls fails the action will be marked as Failed.
+The Create/Update account performs multiple web calls to creating and modifying the Account. When one of the web calls fails the action will be marked as Failed.
 
   - Create or corrolate a account in KPN Lisa
   - Set the manager to the account
-  - Sets a default WorkSpaceProfile _(Ontzorgd/Assisted)_ Only on create!   # Hardcoded
 
+#### Update
 
-##### Update
   - Update an account in KPN Lisa
-  - Update the manager the account _or_
+  - Update the manager of the account _or_
   - Remove the manager from the account
+
+#### Permission: Workspace Profile
+
+A User can only have one Workspaceprofile, so be careful not to add multiple profiles to a user. The return will remove whatever workspaceProfile is active at the moment. This can result in unwanted behaviour.
+
+## KPN Lisa Docs
+
+The API documentation specifies all fields that can be set to the user. All string and number values can be uses in this connector. See the [KPN Lisa Docs](https://mwpapi.kpnwerkplek.com/index.html#model-User) for the full list of fields. Boolean values need a modification in the scripts as result of limitations by HelloID.
 
 ## Setup the connector
 

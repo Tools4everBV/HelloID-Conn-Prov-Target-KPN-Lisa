@@ -45,3 +45,4 @@ Met behulp van HelloID kan je diverse systemen met KPN LISA integreren, waaronde
 * AFAS - KPN LISA koppeling: De Human Relationship Management (HRM)-oplossing van AFAS stelt je in staat tot het automatiseren van alle HR-processen gerelateerd aan zowel personeels- als salarisadministratie. De AFAS - KPN LISA koppeling zorgt dat alle relevante informatie uit AFAS zijn weg vindt naar AFAS, zonder dat jij hiernaar omkijken hebt. HelloID fungeert daarbij als tussenpersoon en maakt de juiste vertaalslag. 
 
 HelloID ondersteunt ruim 200 connectoren, waarmee we een breed scala aan integratiemogelijkheden bieden tussen Ultimo en andere bron- en doelsystemen. Ons aanbod aan connectoren en integraties continu breiden we continu uit, waardoor je met alle populaire systemen kunt integreren.
+

@@ -1,5 +1,3 @@
-## KPN LISA Target Connector
-
 De KPN LISA target connector koppelt KPN LISA via de Identity & Access Management (IAM)-oplossing HelloID van Tools4ever aan diverse bronsystemen. Prettig, want zo automatiseer je het beheer van gebruikersaccounts en autorisaties in KPN-werkplekken. Gegevens uit je bronsysteem zijn daarbij altijd leidend, wat fouten voorkomt. Je bespaart tijd, ondersteunt je organisatie optimaal en verhoogt de gebruikerstevredenheid. 
 
 ## Wat is KPN LISA?
@@ -35,14 +33,13 @@ Met behulp van de KPN LISA target connector koppel je KPN LISA aan HelloID. Je m
 | **Andere functie medewerker** |	Medewerkers kunnen binnen een organisatie een nieuwe functie toegewezen krijgen. Ook kan een bestaande functie op de schop gaan. Beide veranderingen vragen om andere autorisaties. Dankzij de koppeling tussen HelloID en KPN LISA vereist dit geen handmatige handelingen en past HelloID automatisch de workspace profiles en groepen aan. De bijbehorende autorisaties worden via KPN Lisa toegewezen. Zo weet je zeker dat gebruikersaccounts altijd in lijn zijn met de actuele functies binnen je organisatie. 
 | **Medewerker treedt uit dienst** | Indien een medewerker uit dienst treedt deactiveert HelloID automatisch het gebruikersaccount in KPN LISA. Ook informeert de IAM-oplossing alle betrokken medewerkers. Na verloop van tijd verwijdert HelloID het KPN LISA-account automatisch, waardoor het clearproces in KPN Lisa wordt gestart.| 
 
-
 ## KPN LISA via HelloID koppelen met bronsystemen
 
 Met behulp van HelloID kan je diverse systemen met KPN LISA integreren, waaronder allerlei bronsystemen. Prettig, want zo vergroot je onder meer de efficiëntie bij het beheer van gebruikers en autorisaties. Je realiseert een veilige en compliant omgeving, waarin gebruikers altijd over toegang tot de juiste systemen, middelen en gegevens beschikken. Enkele voorbeelden van veelvoorkomende integraties via HelloID zijn:
 
-* Visma Raet - KPN LISA koppeling: Met behulp van de Visma Raet - KPN LISA koppeling maakt de IAM-oplossing op basis van alle relevante informatie uit het populaire HR-systeem automatisch de juiste gebruikersaccounts aan in KPN LISA en kent de benodigde autorisaties toe.
+* **Visma Raet - KPN LISA koppeling:** Met behulp van de Visma Raet - KPN LISA koppeling maakt de IAM-oplossing op basis van alle relevante informatie uit het populaire HR-systeem automatisch de juiste gebruikersaccounts aan in KPN LISA en kent de benodigde autorisaties toe.
 
-* AFAS - KPN LISA koppeling: De Human Relationship Management (HRM)-oplossing van AFAS stelt je in staat tot het automatiseren van alle HR-processen gerelateerd aan zowel personeels- als salarisadministratie. De AFAS - KPN LISA koppeling zorgt dat alle relevante informatie uit AFAS zijn weg vindt naar AFAS, zonder dat jij hiernaar omkijken hebt. HelloID fungeert daarbij als tussenpersoon en maakt de juiste vertaalslag. 
+* **AFAS - KPN LISA koppeling:** De Human Relationship Management (HRM)-oplossing van AFAS stelt je in staat tot het automatiseren van alle HR-processen gerelateerd aan zowel personeels- als salarisadministratie. De AFAS - KPN LISA koppeling zorgt dat alle relevante informatie uit AFAS zijn weg vindt naar AFAS, zonder dat jij hiernaar omkijken hebt. HelloID fungeert daarbij als tussenpersoon en maakt de juiste vertaalslag. 
 
 HelloID ondersteunt ruim 200 connectoren, waarmee we een breed scala aan integratiemogelijkheden bieden tussen Ultimo en andere bron- en doelsystemen. Ons aanbod aan connectoren en integraties continu breiden we continu uit, waardoor je met alle populaire systemen kunt integreren.
 

@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Groups-Revoke
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -99,7 +107,7 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -107,11 +115,11 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups/$($ActionContext.References.Permission.Reference)"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/groups/$($actionContext.References.Permission.Reference)"
         Method = "Delete"
     }
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
+    if (-Not ($actionContext.DryRun -eq $True)) {
         try {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
@@ -127,35 +135,35 @@ try {
     }
 
     if ($InvalidOperation) {
-        Write-Verbose -Verbose "Verifying that the group [$($ActionContext.References.Permission.Reference)] is removed"
+        Write-Verbose -Verbose "Verifying that the group [$($actionContext.References.Permission.Reference)] is removed"
 
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/groups"
             Method = "Get"
         }
         $result = (Invoke-RestMethod @LisaRequest @SplatParams)
 
-        if ($ActionContext.References.Permission.Reference -in $result.value.id) {
-            throw "Group [$($ActionContext.References.Permission.Reference)] is not removed"
+        if ($actionContext.References.Permission.Reference -in $result.value.id) {
+            throw "Group [$($actionContext.References.Permission.Reference)] is not removed"
         }
     }
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission"
-            Message = "Group Permission $($ActionContext.References.Permission.Reference) removed from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]"
+            Message = "Group Permission $($actionContext.References.Permission.Reference) removed from account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]"
             IsError = $False
         })
 
-    $OutputContext.Success = $True
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "RevokePermission" # Optionally specify a different action for this audit log
-            Message = "Failed to remove Group permission $($ActionContext.References.Permission.Reference) from account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to remove Group permission $($actionContext.References.Permission.Reference) from account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

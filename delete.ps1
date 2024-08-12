@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Delete
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -99,26 +107,26 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    Write-Verbose -Verbose "Removing KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+    Write-Verbose -Verbose "Removing KPN Lisa account for '$($personContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
         Method = "Delete"
     }
 
     try {
-        if (-not($ActionContext.DryRun -eq $true)) {
+        if (-not($actionContext.DryRun -eq $true)) {
             [void] (Invoke-RestMethod @LisaRequest @splatParams)
         }
 
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                 Message = "Account for '$($p.DisplayName)' is deleted"
                 IsError = $False
@@ -128,7 +136,7 @@ try {
         $StatusCode = $PSItem.Exception.Response.StatusCode
 
         if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
-            $OutputContext.AuditLogs.Add([PSCustomObject]@{
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                     Message = "Account for '$($p.DisplayName)' doesn't exist, mark as deleted"
                     IsError = $False
@@ -139,16 +147,16 @@ try {
         }
     }
 
-    $OutputContext.Success = $True
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Error deleting account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error deleting account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

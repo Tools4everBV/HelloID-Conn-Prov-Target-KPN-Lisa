@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Roles-Revoke
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -43,63 +51,6 @@ function Get-LisaAccessToken {
         else {
             Write-Output ($Response.access_token)
         }
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
-    }
-}
-
-
-function Get-LisaCollection {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]
-        $Uri,
-
-        [Parameter(Mandatory)]
-        [string]
-        $Endpoint,
-
-        [Parameter(Mandatory)]
-        [securestring]
-        $AccessToken
-    )
-
-    try {
-        Write-Verbose -Verbose "Setting authorizationHeaders"
-
-        $LisaRequest = @{
-            Authentication = "Bearer"
-            Token          = $AccessToken
-            ContentType    = "application/json; charset=utf-8"
-            Headers        = @{
-                "Mwp-Api-Version" = "1.0"
-            }
-        }
-
-        $SplatParams = @{
-            Uri    = "$($Uri)/$($Endpoint)"
-            Method = "Get"
-            Body   = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-        }
-
-        do {
-            $Result = Invoke-RestMethod @LisaRequest @SplatParams
-
-            $SplatParams.Body.SkipToken = $Result.nextLink
-
-            if ($Result -is [array]) {
-                Write-Output $Result
-            }
-            else {
-                Write-Output $Result.value
-            }
-        }
-        until([string]::IsNullOrWhiteSpace($Result.nextLink))
     }
     catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
@@ -153,31 +104,41 @@ function Resolve-ErrorMessage {
 
 # Start Script
 try {
-    # Getting accessToken
-    $AccessToken = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+    # Formatting Headers and authentication for KPN Lisa Requests
+    $LisaRequest = @{
+        Authentication = "Bearer"
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        ContentType    = "application/json; charset=utf-8"
+        Headers        = @{
+            "Mwp-Api-Version" = "1.0"
+        }
+    }
 
     $SplatParams = @{
-        Uri         = $ActionContext.Configuration.BaseUrl
-        Endpoint    = "WorkspaceProfiles"
-        AccessToken = $AccessToken
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/LisaRoles/$($actionContext.References.Permission.Reference)"
+        Method = "Delete"
     }
-    $WorkspaceProfiles = Get-LisaCollection @SplatParams
 
-    $WorkspaceProfiles | ForEach-Object {
-        $DisplayName = "WorkspaceProfile - $($PSItem.friendlyDisplayName)"
-
-        $OutputContext.Permissions.Add([PSCustomObject]@{
-                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
-                Identification = @{
-                    Reference = $PSItem.workspaceProfileId
-                }
-            })
+    if (-Not ($actionContext.DryRun -eq $True)) {
+        [void] (Invoke-RestMethod @LisaRequest @SplatParams) #If 200 it returns a Empty String
     }
+
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = "RevokePermission"
+            Message = "Permission $($actionContext.References.Permission.Reference) removed from account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]"
+            IsError = $False
+        })
+
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    throw $Exception.ErrorMessage
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = "RevokePermission" # Optionally specify a different action for this audit log
+            Message = "Failed to remove permission $($actionContext.References.Permission.Reference) from account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            IsError = $True
+        })
 }

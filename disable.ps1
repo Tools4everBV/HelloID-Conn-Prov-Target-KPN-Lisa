@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Disable
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -99,17 +107,17 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    Write-Verbose -Verbose "Disable KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+    Write-Verbose -Verbose "Disable KPN Lisa account for '$($personContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
         Method = "Patch"
         Body   = @{
             propertyName = "accountEnabled"
@@ -117,26 +125,26 @@ try {
         }
     }
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
+    if (-Not ($actionContext.DryRun -eq $True)) {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount"
-            Message = "Account for '$($PersonContext.Person.DisplayName)' is disabled"
+            Message = "Account for '$($personContext.Person.DisplayName)' is disabled"
             IsError = $False
         })
 
-    $OutputContext.Success = $True
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DisableAccount" # Optionally specify a different action for this audit log
-            Message = "Error disabling account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error disabling account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

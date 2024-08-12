@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Roles-Permissions
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -50,6 +58,63 @@ function Get-LisaAccessToken {
 }
 
 
+function Get-LisaCollection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]
+        $Uri,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Endpoint,
+
+        [Parameter(Mandatory)]
+        [securestring]
+        $AccessToken
+    )
+
+    try {
+        Write-Verbose -Verbose "Setting authorizationHeaders"
+
+        $LisaRequest = @{
+            Authentication = "Bearer"
+            Token          = $AccessToken
+            ContentType    = "application/json; charset=utf-8"
+            Headers        = @{
+                "Mwp-Api-Version" = "1.0"
+            }
+        }
+
+        $SplatParams = @{
+            Uri    = "$($Uri)/$($Endpoint)"
+            Method = "Get"
+            Body   = @{
+                Top       = 999
+                SkipToken = $Null
+            }
+        }
+
+        do {
+            $Result = Invoke-RestMethod @LisaRequest @SplatParams
+
+            $SplatParams.Body.SkipToken = $Result.nextLink
+
+            if ($Result -is [array]) {
+                Write-Output $Result
+            }
+            else {
+                Write-Output $Result.value
+            }
+        }
+        until([string]::IsNullOrWhiteSpace($Result.nextLink))
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($PSItem)
+    }
+}
+
+
 function Resolve-ErrorMessage {
     [CmdletBinding()]
     param (
@@ -94,51 +159,33 @@ function Resolve-ErrorMessage {
 #endregion functions
 
 
-$FieldsToCheck = @(
-    "userPrincipalName"
-)
-
-
 # Start Script
 try {
-    # Formatting Headers and authentication for KPN Lisa Requests
-    $LisaRequest = @{
-        Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
-        ContentType    = "application/json; charset=utf-8"
-        Headers        = @{
-            "Mwp-Api-Version" = "1.0"
-        }
-    }
+    # Getting accessToken
+    $AccessToken = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
-        Method = "Get"
-        Body   = @{
-            filter = $Null
-        }
+        Uri         = $actionContext.Configuration.BaseUrl
+        Endpoint    = "LisaRoles"
+        AccessToken = $AccessToken
     }
+    $LisaRoles = Get-LisaCollection @SplatParams
 
-    foreach ($Field in $FieldsToCheck) {
-        $SplatParams.Body.filter = "$($Field) eq '$($ActionContext.Data.$Field)'"
+    $LisaRoles | ForEach-Object {
+        $DisplayName = "LisaRole - $($PSItem.description) ($($PSItem.roleName))"
 
-        $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
-
-        if ($UserResponse.count -eq 0) {
-            Write-Verbose -Verbose "$($Field) with value '$($ActionContext.Data.$Field)' is unique."
-        }
-        else {
-            Write-Verbose -Verbose "$($Field) with value '$($ActionContext.Data.$Field)' already exists."
-
-            $OutputContext.NonUniqueFields.Add($Field)
-        }
+        $outputContext.Permissions.Add([PSCustomObject]@{
+                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
+                Identification = @{
+                    Reference = $PSItem.id
+                }
+            })
     }
-
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    Write-Error "Error creating account [$($PersonContext.Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
+    throw $Exception.ErrorMessage
 }

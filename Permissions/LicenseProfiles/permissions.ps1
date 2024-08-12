@@ -1,3 +1,12 @@
+
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-LicenseProfiles-Permissions
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -154,22 +163,22 @@ function Resolve-ErrorMessage {
 # Start Script
 try {
     # Getting accessToken
-    $AccessToken = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+    $AccessToken = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
-        Uri         = $ActionContext.Configuration.BaseUrl
-        Endpoint    = "Licenses"
+        Uri         = $actionContext.Configuration.BaseUrl
+        Endpoint    = "LicenseProfiles"
         AccessToken = $AccessToken
     }
-    $Licenses = Get-LisaCollection @SplatParams
+    $LicenseProfiles = Get-LisaCollection @SplatParams
 
-    $Licenses | ForEach-Object {
-        $DisplayName = "License - $($PSItem.DisplayName)"
+    $LicenseProfiles | ForEach-Object {
+        $DisplayName = "LicenseProfile - $($PSItem.DisplayName)"
 
-        $OutputContext.Permissions.Add([PSCustomObject]@{
+        $outputContext.Permissions.Add([PSCustomObject]@{
                 DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
                 Identification = @{
-                    Reference = $PSItem.skuId
+                    Reference = $PSItem.licenseProfileId
                 }
             })
     }

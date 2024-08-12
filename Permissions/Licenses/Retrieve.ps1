@@ -50,6 +50,63 @@ function Get-LisaAccessToken {
 }
 
 
+function Get-LisaCollection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]
+        $Uri,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Endpoint,
+
+        [Parameter(Mandatory)]
+        [securestring]
+        $AccessToken
+    )
+
+    try {
+        Write-Verbose -Verbose "Setting authorizationHeaders"
+
+        $LisaRequest = @{
+            Authentication = "Bearer"
+            Token          = $AccessToken
+            ContentType    = "application/json; charset=utf-8"
+            Headers        = @{
+                "Mwp-Api-Version" = "1.0"
+            }
+        }
+
+        $SplatParams = @{
+            Uri    = "$($Uri)/$($Endpoint)"
+            Method = "Get"
+            Body   = @{
+                Top       = 999
+                SkipToken = $Null
+            }
+        }
+
+        do {
+            $Result = Invoke-RestMethod @LisaRequest @SplatParams
+
+            $SplatParams.Body.SkipToken = $Result.nextLink
+
+            if ($Result -is [array]) {
+                Write-Output $Result
+            }
+            else {
+                Write-Output $Result.value
+            }
+        }
+        until([string]::IsNullOrWhiteSpace($Result.nextLink))
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($PSItem)
+    }
+}
+
+
 function Resolve-ErrorMessage {
     [CmdletBinding()]
     param (
@@ -96,47 +153,31 @@ function Resolve-ErrorMessage {
 
 # Start Script
 try {
-    # Formatting Headers and authentication for KPN Lisa Requests
-    $LisaRequest = @{
-        Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
-        ContentType    = "application/json; charset=utf-8"
-        Headers        = @{
-            "Mwp-Api-Version" = "1.0"
-        }
-    }
-
-    Write-Verbose -Verbose "Disable KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+    # Getting accessToken
+    $AccessToken = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
-        Method = "Patch"
-        Body   = @{
-            propertyName = "accountEnabled"
-            value        = $False
-        }
+        Uri         = $ActionContext.Configuration.BaseUrl
+        Endpoint    = "Licenses"
+        AccessToken = $AccessToken
     }
+    $Licenses = Get-LisaCollection @SplatParams
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+    $Licenses | ForEach-Object {
+        $DisplayName = "License - $($PSItem.DisplayName)"
+
+        $OutputContext.Permissions.Add([PSCustomObject]@{
+                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
+                Identification = @{
+                    Reference = $PSItem.skuId
+                }
+            })
     }
-
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "DisableAccount"
-            Message = "Account for '$($PersonContext.Person.DisplayName)' is disabled"
-            IsError = $False
-        })
-
-    $OutputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "DisableAccount" # Optionally specify a different action for this audit log
-            Message = "Error disabling account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
-            IsError = $True
-        })
+    throw $Exception.ErrorMessage
 }

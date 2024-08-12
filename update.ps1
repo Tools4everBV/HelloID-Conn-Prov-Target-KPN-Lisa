@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Update
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -107,87 +115,87 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
         }
     }
 
-    #Get previous account, select only $OutputContext.Data.Keys
+    #Get previous account, select only $outputContext.Data.Keys
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
         Method = "Get"
     }
     $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
 
-    $OutputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $OutputContext.Data.PSObject.Properties.Name)
+    $outputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $outputContext.Data.PSObject.Properties.Name)
 
-    Write-Verbose -Verbose "Updating KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+    Write-Verbose -Verbose "Updating KPN Lisa account for '$($personContext.Person.DisplayName)'"
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/bulk"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/bulk"
         Method = "Patch"
-        Body   = $OutputContext.Data | Select-Object -Property * -ExcludeProperty $NonUpdatables
+        Body   = $outputContext.Data | Select-Object -Property * -ExcludeProperty $NonUpdatables
     }
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
+    if (-Not ($actionContext.DryRun -eq $True)) {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Account for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($ActionContext.References.Account)'"
+            Message = "Account for '$($personContext.Person.DisplayName)' Updated. ObjectId: '$($actionContext.References.Account)'"
             IsError = $False
         })
 
     # Updating manager
-    if ($Null -eq $ActionContext.References.ManagerAccount) {
+    if ($Null -eq $actionContext.References.ManagerAccount) {
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/manager"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/manager"
             Method = "Delete"
         }
 
         # TODO:: validate return value on update and delete for manager
-        if (-Not ($ActionContext.DryRun -eq $True)) {
+        if (-Not ($actionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($PersonContext.Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
+                Message = "Manager for '$($personContext.Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }
     else {
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/Manager"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/Manager"
             Method = "Put"
-            Body   = $ActionContext.References.ManagerAccount
+            Body   = $actionContext.References.ManagerAccount
         }
 
         # TODO:: validate return value on update and delete for manager
-        if (-Not ($ActionContext.DryRun -eq $True)) {
+        if (-Not ($actionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
 
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-                Message = "Manager for '$($PersonContext.Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
+                Message = "Manager for '$($personContext.Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
                 IsError = $False
             })
     }
 
-    $OutputContext.Success = $True
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error updating account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

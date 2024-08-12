@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-WorkspaceProfiles-Permissions
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -154,22 +162,22 @@ function Resolve-ErrorMessage {
 # Start Script
 try {
     # Getting accessToken
-    $AccessToken = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+    $AccessToken = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
 
     $SplatParams = @{
-        Uri         = $ActionContext.Configuration.BaseUrl
-        Endpoint    = "LicenseProfiles"
+        Uri         = $actionContext.Configuration.BaseUrl
+        Endpoint    = "WorkspaceProfiles"
         AccessToken = $AccessToken
     }
-    $LicenseProfiles = Get-LisaCollection @SplatParams
+    $WorkspaceProfiles = Get-LisaCollection @SplatParams
 
-    $LicenseProfiles | ForEach-Object {
-        $DisplayName = "LicenseProfile - $($PSItem.DisplayName)"
+    $WorkspaceProfiles | ForEach-Object {
+        $DisplayName = "WorkspaceProfile - $($PSItem.friendlyDisplayName)"
 
-        $OutputContext.Permissions.Add([PSCustomObject]@{
+        $outputContext.Permissions.Add([PSCustomObject]@{
                 DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
                 Identification = @{
-                    Reference = $PSItem.licenseProfileId
+                    Reference = $PSItem.workspaceProfileId
                 }
             })
     }

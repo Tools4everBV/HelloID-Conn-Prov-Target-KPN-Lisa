@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Create
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -99,7 +107,7 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -107,9 +115,9 @@ try {
     }
 
     #region Correlation
-    if ($ActionContext.CorrelationConfiguration.Enabled) {
-        $CorrelationField = $ActionContext.CorrelationConfiguration.accountField
-        $CorrelationValue = $ActionContext.CorrelationConfiguration.PersonFieldValue
+    if ($actionContext.CorrelationConfiguration.Enabled) {
+        $CorrelationField = $actionContext.CorrelationConfiguration.accountField
+        $CorrelationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
 
         if ($Null -eq $CorrelationField -or $Null -eq $CorrelationValue) {
             throw "Correlation is enabled but not configured correctly."
@@ -117,7 +125,7 @@ try {
 
         #  Write logic here that checks if the account can be correlated in the target system
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users"
             Method = "Get"
             Body   = @{
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
@@ -132,64 +140,64 @@ try {
         if ($CorrelatedAccount.count -eq 1) {
             $CorrelatedAccount = $CorrelatedAccount.value
 
-            $OutputContext.AccountReference = $CorrelatedAccount.id
+            $outputContext.AccountReference = $CorrelatedAccount.id
 
-            $OutputContext.Data.PSObject.Properties | ForEach-Object {
+            $outputContext.Data.PSObject.Properties | ForEach-Object {
                 if ($CorrelatedAccount.PSobject.Properties.Name.Contains($PSItem.Name)) {
-                    $OutputContext.Data.$($PSItem.Name) = $CorrelatedAccount.$($PSItem.Name)
+                    $outputContext.Data.$($PSItem.Name) = $CorrelatedAccount.$($PSItem.Name)
                 }
             }
 
-            $OutputContext.AuditLogs.Add([PSCustomObject]@{
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "CorrelateAccount" # Optionally specify a different action for this audit log
                     Message = "Correlated account with username $($CorrelatedAccount.UserName) on field $($CorrelationField) with value $($CorrelationValue)"
                     IsError = $False
                 })
 
-            $OutputContext.Success = $True
-            $OutputContext.AccountCorrelated = $True
+            $outputContext.Success = $True
+            $outputContext.AccountCorrelated = $True
         }
     }
     #endregion correlation
 
     # Create KPN Lisa Account
-    if (-Not $OutputContext.AccountCorrelated) {
+    if (-Not $outputContext.AccountCorrelated) {
 
         $CreationProperties = @(
             "changePasswordNextSignIn", "usageLocation", "preferredLanguage",
             "givenName", "surName", "displayName", "userPrincipalName"
         )
 
-        Write-Verbose -Verbose "Creating KPN Lisa account for '$($PersonContext.Person.DisplayName)'"
+        Write-Verbose -Verbose "Creating KPN Lisa account for '$($personContext.Person.DisplayName)'"
 
-        if ($OutputContext.Data.PSobject.Properties.Name.Contains("mail") -and $Null -eq $OutputContext.Data.mail) {
-            $OutputContext.Data.mail = $OutputContext.Data.userPrincipalName
+        if ($outputContext.Data.PSobject.Properties.Name.Contains("mail") -and $Null -eq $outputContext.Data.mail) {
+            $outputContext.Data.mail = $outputContext.Data.userPrincipalName
         }
 
-        $Body = $OutputContext.Data | Select-Object $CreationProperties
+        $Body = $outputContext.Data | Select-Object $CreationProperties
 
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users"
             Method = "Post"
             Body   = $Body
         }
 
-        if (-Not ($ActionContext.DryRun -eq $True)) {
+        if (-Not ($actionContext.DryRun -eq $True)) {
             $UserResponse = Invoke-RestMethod @LisaRequest @SplatParams
-            $OutputContext.AccountReference = $UserResponse.objectId
+            $outputContext.AccountReference = $UserResponse.objectId
         }
         else {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
-            $OutputContext.AccountReference = 'unknown'
+            $outputContext.AccountReference = 'unknown'
         }
 
 
-        $OutputContext.Data | Add-Member -NotePropertyMembers @{
+        $outputContext.Data | Add-Member -NotePropertyMembers @{
             password = $UserResponse.temporaryPassword
         } -Force
 
         #Update the user with all other props
-        $Body = $OutputContext.Data | Select-Object -Property *, "accountEnabled" -ExcludeProperty @(
+        $Body = $outputContext.Data | Select-Object -Property *, "accountEnabled" -ExcludeProperty @(
             $CreationProperties, "password"
         )
 
@@ -197,44 +205,44 @@ try {
         $Body.accountEnabled = $False
 
         $SplatParams = @{
-            Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($OutputContext.AccountReference)/bulk"
+            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($outputContext.AccountReference)/bulk"
             Method = "Patch"
             Body   = $Body
         }
 
-        if (-Not ($ActionContext.DryRun -eq $True)) {
+        if (-Not ($actionContext.DryRun -eq $True)) {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams)
         }
         else {
             Write-Verbose -Verbose ($Body | ConvertTo-Json)
         }
 
-        $OutputContext.AuditLogs.Add([PSCustomObject]@{
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                Message = "Created account for '$($PersonContext.Person.DisplayName)'. Id: $($OutputContext.AccountReference)"
+                Message = "Created account for '$($personContext.Person.DisplayName)'. Id: $($outputContext.AccountReference)"
                 IsError = $False
             })
 
         # Set the manager
-        if ($ActionContext.References.ManagerAccount) {
+        if ($actionContext.References.ManagerAccount) {
             $SplatParams = @{
-                Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($OutputContext.AccountReference)/Manager"
+                Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($outputContext.AccountReference)/Manager"
                 Method = "Put"
-                Body   = $ActionContext.References.ManagerAccount
+                Body   = $actionContext.References.ManagerAccount
             }
 
-            if (-Not ($ActionContext.DryRun -eq $True)) {
+            if (-Not ($actionContext.DryRun -eq $True)) {
                 [void] (Invoke-RestMethod @LisaRequest @SplatParams)
             }
 
-            $OutputContext.AuditLogs.Add([PSCustomObject]@{
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "CreateAccount" # Optionally specify a different action for this audit log
-                    Message = "Added Manager $($PersonContext.Manager.displayName) to '$($PersonContext.Person.DisplayName)'"
+                    Message = "Added Manager $($personContext.Manager.displayName) to '$($personContext.Person.DisplayName)'"
                     IsError = $False
                 })
         }
 
-        $OutputContext.Success = $True
+        $outputContext.Success = $True
     }
 }
 catch {
@@ -242,9 +250,9 @@ catch {
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "CreateAccount" # Optionally specify a different action for this audit log
-            Message = "Error creating account [$($PersonContext.Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Error creating account [$($personContext.Person.DisplayName)]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

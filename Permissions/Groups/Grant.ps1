@@ -1,3 +1,11 @@
+###################################################################
+# HelloID-Conn-Prov-Target-KPNLisa-Groups-Grant
+# PowerShell V2
+###################################################################
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
@@ -99,7 +107,7 @@ try {
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
-        Token          = $ActionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
+        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
         ContentType    = "application/json; charset=utf-8"
         Headers        = @{
             "Mwp-Api-Version" = "1.0"
@@ -107,12 +115,12 @@ try {
     }
 
     $SplatParams = @{
-        Uri    = "$($ActionContext.Configuration.BaseUrl)/Users/$($ActionContext.References.Account)/groups"
+        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/groups"
         Method = "Post"
-        body   = $ActionContext.References.Permission.Reference
+        body   = $actionContext.References.Permission.Reference
     }
 
-    if (-Not ($ActionContext.DryRun -eq $True)) {
+    if (-Not ($actionContext.DryRun -eq $True)) {
         try {
             [void] (Invoke-RestMethod @LisaRequest @SplatParams) #If 200 it returns a Empty String
         }
@@ -126,22 +134,22 @@ try {
         }
     }
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission"
-            Message = "Permission $($ActionContext.References.Permission.Reference) added to account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]"
+            Message = "Permission $($actionContext.References.Permission.Reference) added to account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]"
             IsError = $False
         })
 
-    $OutputContext.Success = $True
+    $outputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $OutputContext.AuditLogs.Add([PSCustomObject]@{
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "GrantPermission" # Optionally specify a different action for this audit log
-            Message = "Failed to add permission $($ActionContext.References.Permission.Reference) to account [$($PersonContext.Person.DisplayName) ($($ActionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
+            Message = "Failed to add permission $($actionContext.References.Permission.Reference) to account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True
         })
 }

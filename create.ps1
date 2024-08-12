@@ -104,6 +104,9 @@ function Resolve-ErrorMessage {
 
 # Start Script
 try {
+    # Initial Assignments
+    $outputContext.AccountReference = 'Currently not available'
+
     # Formatting Headers and authentication for KPN Lisa Requests
     $LisaRequest = @{
         Authentication = "Bearer"
@@ -117,7 +120,7 @@ try {
     #region Correlation
     if ($actionContext.CorrelationConfiguration.Enabled) {
         $CorrelationField = $actionContext.CorrelationConfiguration.accountField
-        $CorrelationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
+        $CorrelationValue = $actionContext.CorrelationConfiguration.AccountFieldValue
 
         if ($Null -eq $CorrelationField -or $Null -eq $CorrelationValue) {
             throw "Correlation is enabled but not configured correctly."
@@ -131,14 +134,14 @@ try {
                 filter = "$($CorrelationField) eq '$($CorrelationValue)'"
             }
         }
-        $CorrelatedAccount = Invoke-RestMethod @LisaRequest @SplatParams
+        $response = Invoke-RestMethod @LisaRequest @SplatParams
 
-        if ($CorrelatedAccount.count -gt 1) {
+        if ($response.count -gt 1) {
             throw "Multiple accounts found with filter: $($SplatParams.Body.filter)"
         }
 
-        if ($CorrelatedAccount.count -eq 1) {
-            $CorrelatedAccount = $CorrelatedAccount.value
+        if ($response.count -eq 1) {
+            $CorrelatedAccount = $response.value
 
             $outputContext.AccountReference = $CorrelatedAccount.id
 

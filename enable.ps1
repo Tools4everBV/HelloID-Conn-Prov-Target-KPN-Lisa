@@ -129,20 +129,20 @@ try {
         [void] (Invoke-RestMethod @LisaRequest @SplatParams)
     }
 
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "EnableAccount"
             Message = "Account for '$($personContext.Person.DisplayName)' is enabled"
             IsError = $False
         })
 
-    $outputContext.Success = $True
+    $OutputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "EnableAccount" # Optionally specify a different action for this audit log
             Message = "Error enabling account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True

@@ -126,7 +126,7 @@ try {
             [void] (Invoke-RestMethod @LisaRequest @splatParams)
         }
 
-        $outputContext.AuditLogs.Add([PSCustomObject]@{
+        $OutputContext.AuditLogs.Add([PSCustomObject]@{
                 Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                 Message = "Account for '$($p.DisplayName)' is deleted"
                 IsError = $False
@@ -136,7 +136,7 @@ try {
         $StatusCode = $PSItem.Exception.Response.StatusCode
 
         if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
-            $outputContext.AuditLogs.Add([PSCustomObject]@{
+            $OutputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = "DeleteAccount" # Optionally specify a different action for this audit log
                     Message = "Account for '$($p.DisplayName)' doesn't exist, mark as deleted"
                     IsError = $False
@@ -147,14 +147,14 @@ try {
         }
     }
 
-    $outputContext.Success = $True
+    $OutputContext.Success = $True
 }
 catch {
     $Exception = $PSItem | Resolve-ErrorMessage
 
     Write-Verbose -Verbose $Exception.VerboseErrorMessage
 
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
+    $OutputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = "DeleteAccount" # Optionally specify a different action for this audit log
             Message = "Error deleting account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
             IsError = $True

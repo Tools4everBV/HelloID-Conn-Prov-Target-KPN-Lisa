@@ -6,196 +6,177 @@
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+$nonUpdatableFields = @(
+    'userPrincipalName'
+    'mail'
+)
+
 #region functions
 function Get-LisaAccessToken {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory)]
         [string]
         $TenantId,
 
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory)]
         [string]
         $ClientId,
 
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory)]
         [string]
         $ClientSecret,
 
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory)]
         [string]
-        $Scope,
-
-        [Parameter()]
-        [switch]
-        $AsSecureString
+        $Scope
     )
 
     try {
-        $SplatParams = @{
-            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
-            ContentType = "application/x-www-form-urlencoded"
-            Method      = "Post"
-            Body        = @{
-                grant_type    = "client_credentials"
-                client_id     = $ClientId
-                client_secret = $ClientSecret
-                scope         = $Scope
-            }
-        }
-        $Response = Invoke-RestMethod @SplatParams
+        $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+        $headers.Add('Content-Type', 'application/x-www-form-urlencoded')
 
-        if ($AsSecureString) {
-            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
+        $body = @{
+            grant_type    = 'client_credentials'
+            client_id     = $ClientId
+            client_secret = $ClientSecret
+            scope         = $Scope
         }
-        else {
-            Write-Output ($Response.access_token)
+
+        $splatRestMethodParameters = @{
+            Uri     = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token/"
+            Method  = 'POST'
+            Headers = $headers
+            Body    = $body
         }
+        Invoke-RestMethod @splatRestMethodParameters
     }
     catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
+        $PSCmdlet.ThrowTerminatingError($_)
     }
 }
-
 
 function Resolve-ErrorMessage {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory)]
         [object]
         $ErrorObject
     )
 
     process {
-        $Exception = [PSCustomObject]@{
+        $exceptionObject = [PSCustomObject]@{
             FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
             MyCommand             = $ErrorObject.InvocationInfo.MyCommand
             RequestUri            = $ErrorObject.TargetObject.RequestUri
             ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = $Null
-            VerboseErrorMessage   = $Null
+            ErrorMessage          = $null
+            VerboseErrorMessage   = $null
         }
 
         switch ($ErrorObject.Exception.GetType().FullName) {
             "Microsoft.PowerShell.Commands.HttpResponseException" {
-                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
+                $exceptionObject.ErrorMessage = $ErrorObject.ErrorDetails.Message
                 break
             }
             "System.Net.WebException" {
-                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
-                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                $exceptionObject.ErrorMessage = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
                 break
             }
             default {
-                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+                $exceptionObject.ErrorMessage = $ErrorObject.Exception.Message
             }
         }
 
-        $Exception.VerboseErrorMessage = @(
+        $exceptionObject.VerboseErrorMessage = @(
             "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
-            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
+            "ErrorMessage: $($exceptionObject.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
         ) -Join " "
 
-        Write-Output $Exception
+        Write-Output $exceptionObject
     }
 }
 #endregion functions
 
-
-# Hack for non updatable fields we like to return
-# @link: https://helloid.canny.io/provisioning/p/exportdata-in-powershell-v2
-$NonUpdatables = @(
-    "userPrincipalName"
-    "mail"
-)
-
-
-# Start Script
 try {
-    # Formatting Headers and authentication for KPN Lisa Requests
-    $LisaRequest = @{
-        Authentication = "Bearer"
-        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
-        ContentType    = "application/json; charset=utf-8"
-        Headers        = @{
-            "Mwp-Api-Version" = "1.0"
+    # Retrieve token
+    $splatGetTokenParams = @{
+        TenantId     = $config.TenantId
+        ClientId     = $config.ClientId
+        ClientSecret = $config.ClientSecret
+        Scope        = $config.Scope
+    }
+    $accessToken = (Get-LisaAccessToken @splatGetTokenParams).access_token
+    $authorizationHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+    $authorizationHeaders.Add("Authorization", "Bearer $accessToken")
+    $authorizationHeaders.Add("Content-Type", "application/json")
+    $authorizationHeaders.Add("Mwp-Api-Version", "1.0")
+
+    # Get correlated account
+    $splatGetAccountParams = @{
+        Uri     = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
+        Method  = 'GET'
+        Headers = $authorizationHeaders
+    }
+    $correlatedAccount = Invoke-RestMethod @splatGetAccountParams
+    $outputContext.PreviousData = $correlatedAccount | Select-Object -Property ([array] $outputContext.Data.PSObject.Properties.Name)
+
+    # Update account
+    if (-Not ($actionContext.DryRun -eq $true)) {
+        Write-Information "Updating KPN Lisa account for '$($personContext.Person.DisplayName)'"
+        $splatUpdateAccountParams = @{
+            Uri     = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/bulk"
+            Method  = "Patch"
+            Body    = $outputContext.Data | Select-Object -Property * -ExcludeProperty $nonUpdatableFields
+            Headers = $authorizationHeaders
         }
-    }
+        $null = Invoke-RestMethod @splatUpdateAccountParams
 
-    #Get previous account, select only $outputContext.Data.Keys
-    $SplatParams = @{
-        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
-        Method = "Get"
-    }
-    $PreviousPerson = Invoke-RestMethod @LisaRequest @SplatParams
-
-    $outputContext.PreviousData = $PreviousPerson | Select-Object -Property ([array] $outputContext.Data.PSObject.Properties.Name)
-
-    Write-Verbose -Verbose "Updating KPN Lisa account for '$($personContext.Person.DisplayName)'"
-
-    $SplatParams = @{
-        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/bulk"
-        Method = "Patch"
-        Body   = $outputContext.Data | Select-Object -Property * -ExcludeProperty $NonUpdatables
-    }
-
-    if (-Not ($actionContext.DryRun -eq $True)) {
-        [void] (Invoke-RestMethod @LisaRequest @SplatParams)
-    }
-
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
             Message = "Account for '$($personContext.Person.DisplayName)' Updated. ObjectId: '$($actionContext.References.Account)'"
-            IsError = $False
+            IsError = $false
         })
 
-    # Updating manager
-    if ($Null -eq $actionContext.References.ManagerAccount) {
-        $SplatParams = @{
-            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/manager"
-            Method = "Delete"
-        }
+    }
 
-        # TODO:: validate return value on update and delete for manager
-        if (-Not ($actionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+    # Update manager
+    if ($null -eq $actionContext.References.ManagerAccount) {
+        if (-Not ($actionContext.DryRun -eq $true)) {
+            $splatUpdateManagerParams = @{
+                Uri     = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/manager"
+                Method  = 'DELETE'
+                Headers = $authorizationHeaders
+            }
+            $null = Invoke-RestMethod @splatUpdateManagerParams
         }
 
         $outputContext.AuditLogs.Add([PSCustomObject]@{
-                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
                 Message = "Manager for '$($personContext.Person.DisplayName)' deleted. ObjectId: '$($UserResponse.objectId)'"
-                IsError = $False
+                IsError = $false
             })
-    }
-    else {
-        $SplatParams = @{
-            Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/Manager"
-            Method = "Put"
-            Body   = $actionContext.References.ManagerAccount
-        }
-
-        # TODO:: validate return value on update and delete for manager
-        if (-Not ($actionContext.DryRun -eq $True)) {
-            [void] (Invoke-RestMethod @LisaRequest @SplatParams)
+    } else {
+        if (-Not ($actionContext.DryRun -eq $true)) {
+            $splatUpdateAccountParams = @{
+                Uri     = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)/Manager"
+                Method  = "Put"
+                Body    = $actionContext.References.ManagerAccount
+                Headers = $authorizationHeaders
+            }
+            $null = Invoke-RestMethod @splatUpdateAccountParams
         }
 
         $outputContext.AuditLogs.Add([PSCustomObject]@{
-                Action  = "UpdateAccount" # Optionally specify a different action for this audit log
                 Message = "Manager for '$($personContext.Person.DisplayName)' Updated. ObjectId: '$($UserResponse.objectId)'"
-                IsError = $False
+                IsError = $false
             })
     }
 
-    $outputContext.Success = $True
-}
-catch {
-    $Exception = $PSItem | Resolve-ErrorMessage
-
-    Write-Verbose -Verbose $Exception.VerboseErrorMessage
-
+    $outputContext.Success = $true
+} catch {
+    $errorObj = Resolve-ErrorMessage -ErrorObject $_
+    Write-Warning $errorObj.VerboseErrorMessage
     $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "UpdateAccount" # Optionally specify a different action for this audit log
-            Message = "Error updating account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
-            IsError = $True
+            Message = "Error updating account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($errorObj.ErrorMessage)."
+            IsError = $true
         })
 }

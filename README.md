@@ -41,6 +41,7 @@
       - [Permission: Workspace Profile](#permission-workspace-profile)
   - [KPN Lisa Docs](#kpn-lisa-docs)
   - [Setup the connector](#setup-the-connector)
+  - [Todo](#todo)
   - [Getting help](#getting-help)
   - [HelloID Docs](#helloid-docs)
 
@@ -110,6 +111,20 @@ The API documentation specifies all fields that can be set to the user. All stri
 The connector files include the account life cycle and two separate Permissions definitions.
 
 For help setting up a new target connector, please refer to our [documentation](https://docs.helloid.com/hc/en-us/articles/360012388639-How-to-add-a-target-system)
+
+## Todo
+
+- `Resolve-Error` functions needs minor modifications.
+   - At this point, the `$Exception.ErrorMessage` might be `$null` in which case a default error message must be returned.
+- In all lifecycle actions, a 'GET' must be added to make sure the account exists. As this is our current beste practice.
+- The `Action` parameter in the `$outputContext.AuditLogs` must be removed. The action will be determined by _HelloID_.
+- The _update_ lifecycle action does not contain our compare logic to compare the `$correlatedAccount` with the `$actionContext.Data`. Since this is our best practice, this will need to be added.
+  - Note that this is also required for the manager update calls.
+- Currently all the `Invoke-RestMethod` calls use two splatting objects. One is being used to retrieve a token. This should be modified and separated into two different sections to make to code more readable.
+- All actions need minor modifications to make sure the code is more in line with our template.
+- The _create_ action also sets the manager. This might be better suited to move to the _update_ action and trigger this directly after correlation.
+
+All todo's mentioned above (apart from the compare logic and error handling) have been applied to the _update_ action.
 
 ## Getting help
 

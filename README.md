@@ -19,6 +19,7 @@
     - [Workspace Profile](#workspace-profile)
     - [Manager Field in Field Mapping](#manager-field-in-field-mapping)
   - [Introduction](#introduction)
+    - [API Endpoints](#api-endpoints)
     - [Actions](#actions)
   - [Getting Started](#getting-started)
     - [Create a Provider in Zenya](#create-a-provider-in-zenya)
@@ -32,7 +33,7 @@
 
 ## Requirements
 
-1. **MWP Api Credentials**: Refer to the KPN MWP API documentation for detailed instructions: [MWP Api documentation](https://mwpapi.kpnwerkplek.com/index.html).
+1. **MWP API Credentials**: Refer to the KPN MWP API documentation for detailed instructions: [MWP API documentation](https://mwpapi.kpnwerkplek.com/index.html).
    - Create an **App Registration** in Microsoft Entra ID.
    - Create access credentials for your app:
      - Create a **client secret** for your app.
@@ -49,12 +50,13 @@
 ### Manager Field in Field Mapping
 
 - The `managerId` field is optional and represents the manager's ID for the user. This field is read-only.
-
-- **Note:** The `managerId` field uses a "None" mapping because the value is calculated within the scripts. We can only assign a manager who exists in KPN Lisa and was created by HelloID. Before assigning a manager, HelloID must first grant the Account entitlement to the manager.
+- **Note:** The `managerId` field uses a "None" mapping because the value is calculated within the scripts. The manager must exist in KPN Lisa and be managed by HelloID. Assign the **Account entitlement** to the manager before setting this field.
 
 ## Introduction
 
-_HelloID-Conn-Prov-Target-KPN-Lisa_ is a _target_ connector. _KPN_ provides a set of REST API's that allow you to programmatically interact with its data. The KPN Lisa connector uses the API endpoints listed in the table below.
+_HelloID-Conn-Prov-Target-KPN-Lisa_ is a target connector that uses KPN's REST APIs to interact with data. Below is a list of API endpoints used in the connector.
+
+### API Endpoints
 
 | Endpoint                                                                                                | Description                                     |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -67,11 +69,11 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a _target_ connector. _KPN_ provides a se
 | [/api/users/{identifier}/manager](https://mwpapi.kpnwerkplek.com/index.html)                            | Update manager of user (PUT)                    |
 | [/api/users/{identifier}/manager](https://mwpapi.kpnwerkplek.com/index.html)                            | Delete manager of user (DELETE)                 |
 | [/api/groups](https://mwpapi.kpnwerkplek.com/index.html)                                                | List groups (GET)                               |
-| [/api/users/{identifier}/groups](https://mwpapi.kpnwerkplek.com/index.html)                             | Add member (POST)                               |
-| [/api/users/{identifier}/groups/{groupidentifier}](https://mwpapi.kpnwerkplek.com/index.html)           | Remove member (DELETE)                          |
+| [/api/users/{identifier}/groups](https://mwpapi.kpnwerkplek.com/index.html)                             | Add member to group (POST)                      |
+| [/api/users/{identifier}/groups/{groupidentifier}](https://mwpapi.kpnwerkplek.com/index.html)           | Remove member from group (DELETE)               |
 | [/api/licenses](https://mwpapi.kpnwerkplek.com/index.html)                                              | List licenses (GET)                             |
 | [/api/users/{identifier}/licenses](https://mwpapi.kpnwerkplek.com/index.html)                           | Add license to user (POST)                      |
-| [//api/users/{identifier}/licenses/{skuId}](https://mwpapi.kpnwerkplek.com/index.html)                  | Remove license from user (DELETE)               |
+| [/api/users/{identifier}/licenses/{skuId}](https://mwpapi.kpnwerkplek.com/index.html)                   | Remove license from user (DELETE)               |
 | [/api/teams](https://mwpapi.kpnwerkplek.com/index.html)                                                 | List teams (GET)                                |
 | [/api/users/{identifier}/teams](https://mwpapi.kpnwerkplek.com/index.html)                              | Add team to user (POST)                         |
 | [/api/users/{identifier}/teams/{memberId}](https://mwpapi.kpnwerkplek.com/index.html)                   | Remove team from user (DELETE)                  |
@@ -119,9 +121,7 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a _target_ connector. _KPN_ provides a se
 
 ### Create a Provider in Zenya
 
-To start using the HelloID-KPNLisa connector, you first need to create a new **Microsoft Entra ID Application**. This application will be used to connect to the API and manage permissions.
-
-Follow these steps:
+To use the HelloID-KPN Lisa connector, you must first create a **Microsoft Entra ID Application**.
 
 1. **Navigate to App Registrations**:
    - Go to the Microsoft Entra ID Portal.
@@ -129,26 +129,24 @@ Follow these steps:
    - Click on **New registration**.
 
 2. **Register the Application**:
-   - **Name**: Enter a name for your application (e.g., "HelloID PowerShell").
-   - **Supported Account Types**: Choose who can use this application (e.g., "Accounts in this organizational directory only").
-   - **Redirect URI**: Choose the platform as `Web` and enter a redirect URI (e.g., `http://localhost`).
+   - **Name**: Enter a name for your application (e.g., "HelloID PowerShell - KPN Lisa").
+   - **Supported Account Types**: Choose "Accounts in this organizational directory only".
+   - **Redirect URI**: Set the platform to **Web** and use a redirect URI (e.g., `http://localhost`).
 
 3. **Complete the Registration**:
    - Click the **Register** button to create your new application.
 
-For detailed steps, refer to the official Microsoft guide: [Quickstart: Register an app in the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate).
+Refer to [Microsoft's Quickstart guide](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate) for more details.
 
 ### Set Up Permissions for KPN MWP API
 
-By default, the Microsoft Entra ID Application is unable to communicate with the KPN MWP API for Lisa. To enable this, follow these steps:
+1. **Contact KPN**:  
+   Request KPN to whitelist your **TenantId** and **AppId** for access to the MWP API.
 
-1. **Contact KPN**:
-   - Reach out to KPN to request whitelisting of your **TenantId** and **AppId** for the MWP API.
+2. **Verify Configuration**:  
+   Once whitelisted, verify that your app can interact with the MWP API by ensuring users and permissions are returned correctly.
 
-2. **Verify Configuration**:
-   - Once KPN completes the whitelisting, ensure the application is able to interact with the MWP API. Verify that users and permissions are returned as expected.
-
-For more detailed information, refer to [MWP Api documentation](https://mwpapi.kpnwerkplek.com/index.html).
+For more information, see the [MWP API documentation](https://mwpapi.kpnwerkplek.com/index.html).
 
 ### Provisioning PowerShell V2 connector
 
@@ -178,16 +176,16 @@ The field mapping can be imported by using the _fieldMapping.json_ file.
 
 The following settings are required to connect to the KPN MWP API:
 
-| Setting                                                           | Description                                                                                                                                                                                                                                                                                                                      | Mandatory |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| **Entra ID App Registration Directory (tenant) ID**               | The ID to the Tenant in Microsoft Entra ID.                                                                                                                                                                                                                                                                                      | Yes       |
-| **Entra ID App Registration Application (client) ID**             | The ID to the App Registration in Microsoft Entra ID .                                                                                                                                                                                                                                                                           | Yes       |
-| **Entra ID App Registration Client Secret**                       | The Client Secret to the App Registration in Microsoft Entra ID.                                                                                                                                                                                                                                                                 | Yes       |
-| **KPN MWP Scope**                                                 | The scope to send when creating the access token. https://kpnwp.onmicrosoft.com/kpnmwpdmwpapi/.default for KPN Modern Workplace - Development. https://kpnwp.onmicrosoft.com/kpnmwptmwpapi/.default for KPN Modern Workplace - Test. https://kpnwp.onmicrosoft.com/kpnmwppmwpapi/.default for KPN Modern Workplace - Production. | Yes       |
-| **MWP Api BaseUrl**                                               | The URL of the MWP API service.                                                                                                                                                                                                                                                                                                  | Yes       |
-| **Set manager when an account is created**                        | When toggled, this connector will calculate and set the manager upon creating an account.                                                                                                                                                                                                                                        | No        |
-| **Update manager when the account update operation is performed** | When toggled, this connector will calculate and set the manager upon updating an account.                                                                                                                                                                                                                                        | No        |
-| **Toggle debug logging**                                          | Displays debug logging when toggled. **Switch off in production**                                                                                                                                                                                                                                                                | No        |
+| Setting                                                           | Description                                                                                                                                                                                                                                                                                                                               | Mandatory |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **Entra ID App Registration Directory (tenant) ID**               | The ID to the Tenant in Microsoft Entra ID.                                                                                                                                                                                                                                                                                               | Yes       |
+| **Entra ID App Registration Application (client) ID**             | The ID to the App Registration in Microsoft Entra ID .                                                                                                                                                                                                                                                                                    | Yes       |
+| **Entra ID App Registration Client Secret**                       | The Client Secret to the App Registration in Microsoft Entra ID.                                                                                                                                                                                                                                                                          | Yes       |
+| **KPN MWP Scope**                                                 | The scope used when creating the access token. Choose from the following based on your environment: <br> - **Development:** `https://kpnwp.onmicrosoft.com/kpnmwpdmwpapi/.default` <br> - **Test:** `https://kpnwp.onmicrosoft.com/kpnmwptmwpapi/.default` <br> - **Production:** `https://kpnwp.onmicrosoft.com/kpnmwppmwpapi/.default`. | Yes       |
+| **MWP API BaseUrl**                                               | The URL of the MWP API service.                                                                                                                                                                                                                                                                                                           | Yes       |
+| **Set manager when an account is created**                        | When toggled, this connector will calculate and set the manager upon creating an account.                                                                                                                                                                                                                                                 | No        |
+| **Update manager when the account update operation is performed** | When toggled, this connector will calculate and set the manager upon updating an account.                                                                                                                                                                                                                                                 | No        |
+| **Toggle debug logging**                                          | Displays debug logging when toggled. **Switch off in production**                                                                                                                                                                                                                                                                         | No        |
 
 ## Getting help
 > [!TIP]

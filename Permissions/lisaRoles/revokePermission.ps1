@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Groups-List
-# List groups as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-LisaRoles-Revoke
+# Revoke lisa role from account
 # PowerShell V2
 #################################################
 
@@ -100,7 +100,15 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    #region Verify account reference
+    $actionMessage = "verifying account reference"
+    
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw "The account reference could not be found"
+    }
+    #endregion Verify account reference
+    
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -140,70 +148,36 @@ try {
     Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
     #endregion Create headers
 
-    #region Get Groups
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups
-    $actionMessage = "querying groups"
+    #region Remove account from lisa role
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/users/{identifier}/lisaroles{roleId}
+    $actionMessage = "revoking lisa role [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
-    $kpnLisaGroups = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaGroupsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink')) {
-            $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
-        }
-
-        Write-Verbose "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
-
-        # Add header after printing splat
-        $getKPNLisaGroupsSplatParams['Headers'] = $headers
-
-        $getKPNLisaGroupsResponse = $null
-        $getKPNLisaGroupsResponse = Invoke-RestMethod @getKPNLisaGroupsSplatParams
-
-        if ($getKPNLisaGroupsResponse.Value -is [array]) {
-            [void]$kpnLisaGroups.AddRange($getKPNLisaGroupsResponse.Value)
-        }
-        else {
-            [void]$kpnLisaGroups.Add($getKPNLisaGroupsResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink'))
-
-    # Filter out onPremisesSyncEnabled groups as they can only be managed onPremises
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.onPremisesSyncEnabled -ne $true }
-    
-    # Filter out grouptypes that cannot be managed from Lisa
-    $unSupportedGroupTypes = @("SoftwareUpdatePolicy", "MWP_DeviceDeploymentProfile", "MWP_UserWorkspaceProfile")
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.groupType -notin $unSupportedGroupTypes }
-
-    Write-Information "Queried groups. Result count: $(($kpnLisaGroups | Measure-Object).Count)"
-    #endregion Get Groups
-
-    #region Send results to HelloID
-    $kpnLisaGroups | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "$($_.groupType) - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id   = $_.id
-                    Name = $_.displayName
-                    Type = $_.groupType
-                }
-            }
-        )
+    $revokePermissionSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($actionContext.References.Account)/lisaroles/$($actionContext.References.Permission.id)"
+        Method      = "DELETE"
+        ContentType = 'application/json; charset=utf-8'
+        Verbose     = $false
+        ErrorAction = "Stop"
     }
-    #endregion Send results to HelloID
+
+    Write-Verbose "SplatParams: $($revokePermissionSplatParams | ConvertTo-Json)"
+
+    if (-Not($actionContext.DryRun -eq $true)) {
+        # Add header after printing splat
+        $revokePermissionSplatParams['Headers'] = $headers
+
+        $revokePermissionResponse = Invoke-RestMethod @revokePermissionSplatParams
+
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Revoked lisa role [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning "DryRun: Would revoke lisa role [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+    }
+    #endregion Remove account from lisa role
 }
 catch {
     $ex = $PSItem
@@ -218,8 +192,26 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    Write-Warning $warningMessage
+    if ($auditMessage -like "*ResourceNotFound*" -and $auditMessage -like "*$($actionContext.References.Permission.id)*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped $($actionMessage). Reason: User is already no longer member or this lisa role no longer exists."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
-    Write-Error $auditMessage
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
+}
+finally {
+    # Check if auditLogs contains errors, if no errors are found, set success to true
+    if (-NOT($outputContext.AuditLogs.IsError -contains $true)) {
+        $outputContext.Success = $true
+    }
 }

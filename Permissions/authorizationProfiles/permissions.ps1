@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Groups-List
-# List groups as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-AuthorizationProfiles-List
+# List authorization profiles as permissions
 # PowerShell V2
 #################################################
 
@@ -140,56 +140,33 @@ try {
     Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
     #endregion Create headers
 
-    #region Get Groups
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups
-    $actionMessage = "querying groups"
+    #region Get AuthorizationProfiles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/authorizationprofiles
+    $actionMessage = "querying authorization profiles"
 
-    $kpnLisaGroups = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaGroupsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink')) {
-            $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
-        }
+    $getKPNLisaAuthorizationProfilesSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/authorizationprofiles"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
 
-        Write-Verbose "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
+    Write-Verbose "SplatParams: $($getKPNLisaAuthorizationProfilesSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaGroupsSplatParams['Headers'] = $headers
+    # Add header after printing splat
+    $getKPNLisaAuthorizationProfilesSplatParams['Headers'] = $headers
 
-        $getKPNLisaGroupsResponse = $null
-        $getKPNLisaGroupsResponse = Invoke-RestMethod @getKPNLisaGroupsSplatParams
+    $getKPNLisaAuthorizationProfilesResponse = $null
+    $getKPNLisaAuthorizationProfilesResponse = Invoke-RestMethod @getKPNLisaAuthorizationProfilesSplatParams
+    $kpnLisaAuthorizationProfiles = $getKPNLisaAuthorizationProfilesResponse
 
-        if ($getKPNLisaGroupsResponse.Value -is [array]) {
-            [void]$kpnLisaGroups.AddRange($getKPNLisaGroupsResponse.Value)
-        }
-        else {
-            [void]$kpnLisaGroups.Add($getKPNLisaGroupsResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink'))
-
-    # Filter out onPremisesSyncEnabled groups as they can only be managed onPremises
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.onPremisesSyncEnabled -ne $true }
+    Write-Information "Queried authorization profiles. Result count: $(($kpnLisaAuthorizationProfiles | Measure-Object).Count)"
+    #endregion Get AuthorizationProfiles
     
-    # Filter out grouptypes that cannot be managed from Lisa
-    $unSupportedGroupTypes = @("SoftwareUpdatePolicy", "MWP_DeviceDeploymentProfile", "MWP_UserWorkspaceProfile")
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.groupType -notin $unSupportedGroupTypes }
-
-    Write-Information "Queried groups. Result count: $(($kpnLisaGroups | Measure-Object).Count)"
-    #endregion Get Groups
-
     #region Send results to HelloID
-    $kpnLisaGroups | ForEach-Object {
+    $kpnLisaAuthorizationProfiles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "$($_.groupType) - $($_.displayName)"
+        $displayName = "AuthorizationProfile - $($_.displayName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
@@ -198,7 +175,6 @@ try {
                 identification = @{
                     Id   = $_.id
                     Name = $_.displayName
-                    Type = $_.groupType
                 }
             }
         )

@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Groups-List
-# List groups as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-LisaRoles-List
+# List lisa roles as permissions
 # PowerShell V2
 #################################################
 
@@ -140,14 +140,14 @@ try {
     Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
     #endregion Create headers
 
-    #region Get Groups
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups
-    $actionMessage = "querying groups"
+    #region Get LisaRoles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/lisaroles
+    $actionMessage = "querying lisa roles"
 
-    $kpnLisaGroups = [System.Collections.ArrayList]@()
+    $kpnLisaLisaRoles = [System.Collections.ArrayList]@()
     do {
-        $getKPNLisaGroupsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups"
+        $getKPNLisaLisaRolesSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/lisaroles"
             Method      = "GET"
             Body        = @{
                 Top       = 999
@@ -156,40 +156,33 @@ try {
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink')) {
-            $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
+        if (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink')) {
+            $getKPNLisaLisaRolesSplatParams.Body.SkipToken = $getKPNLisaLisaRolesResponse.'nextLink'
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($getKPNLisaLisaRolesSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
-        $getKPNLisaGroupsSplatParams['Headers'] = $headers
+        $getKPNLisaLisaRolesSplatParams['Headers'] = $headers
 
-        $getKPNLisaGroupsResponse = $null
-        $getKPNLisaGroupsResponse = Invoke-RestMethod @getKPNLisaGroupsSplatParams
+        $getKPNLisaLisaRolesResponse = $null
+        $getKPNLisaLisaRolesResponse = Invoke-RestMethod @getKPNLisaLisaRolesSplatParams
 
-        if ($getKPNLisaGroupsResponse.Value -is [array]) {
-            [void]$kpnLisaGroups.AddRange($getKPNLisaGroupsResponse.Value)
+        if ($getKPNLisaLisaRolesResponse.Value -is [array]) {
+            [void]$kpnLisaLisaRoles.AddRange($getKPNLisaLisaRolesResponse.Value)
         }
         else {
-            [void]$kpnLisaGroups.Add($getKPNLisaGroupsResponse.Value)
+            [void]$kpnLisaLisaRoles.Add($getKPNLisaLisaRolesResponse.Value)
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink'))
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink'))
 
-    # Filter out onPremisesSyncEnabled groups as they can only be managed onPremises
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.onPremisesSyncEnabled -ne $true }
-    
-    # Filter out grouptypes that cannot be managed from Lisa
-    $unSupportedGroupTypes = @("SoftwareUpdatePolicy", "MWP_DeviceDeploymentProfile", "MWP_UserWorkspaceProfile")
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.groupType -notin $unSupportedGroupTypes }
-
-    Write-Information "Queried groups. Result count: $(($kpnLisaGroups | Measure-Object).Count)"
-    #endregion Get Groups
+    Write-Information "Queried lisa roles. Result count: $(($kpnLisaLisaRoles | Measure-Object).Count)"
+    #endregion Get LisaRoles
 
     #region Send results to HelloID
-    $kpnLisaGroups | ForEach-Object {
+    $kpnLisaLisaRoles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "$($_.groupType) - $($_.displayName)"
+        $displayName = "LisaRole - $($_.roleName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
@@ -197,8 +190,7 @@ try {
                 displayName    = $displayName
                 identification = @{
                     Id   = $_.id
-                    Name = $_.displayName
-                    Type = $_.groupType
+                    Name = $_.roleName
                 }
             }
         )

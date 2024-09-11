@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Groups-List
-# List groups as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-UniquenessCheck
+# Check if fields are unique
 # PowerShell V2
 #################################################
 
@@ -100,17 +100,32 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+#region Fields to check
+$fieldsToCheck = [PSCustomObject]@{
+    "userPrincipalName" = [PSCustomObject]@{
+        accountValue   = $actionContext.Data.userPrincipalName
+        keepInSyncWith = @("mail") # The properties to keep in sync with, if one of these properties isn't unique, this property wil be treated as not unique as well
+        crossCheckOn   = @("mail") # The properties to keep in cross-check on
+    }
+    "mail"              = [PSCustomObject]@{ # This is the value that is returned to HelloID in NonUniqueFields
+        accountValue   = $actionContext.Data.mail
+        keepInSyncWith = @("userPrincipalName") # The properties to keep in sync with, if one of these properties isn't unique, this property wil be treated as not unique as well
+        crossCheckOn   = @("userPrincipalName") # The properties to keep in cross-check on
+    }
+}
+#endregion Fields to check
+
+try {
     #region Create access token
     $actionMessage = "creating access token"
-    
+  
     $createAccessTokenBody = @{
         grant_type    = "client_credentials"
         client_id     = $actionContext.Configuration.EntraIDAppId
         client_secret = $actionContext.Configuration.EntraIDAppSecret
         scope         = $actionContext.Configuration.KPNMWPScope
     }
-    
+  
     $createAccessTokenSplatParams = @{
         Uri             = "https://login.microsoftonline.com/$($actionContext.Configuration.EntraIDTenantID)/oauth2/v2.0/token/"
         Headers         = $headers
@@ -121,89 +136,95 @@ try {
         Verbose         = $false
         ErrorAction     = "Stop"
     }
-    
+  
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
-    
+  
     Write-Verbose "Created access token. Result: $($createAccessTokenResonse | ConvertTo-Json)"
     #endregion Create access token
-    
+  
     #region Create headers
     $actionMessage = "creating headers"
-    
+  
     $headers = @{
         "Authorization"   = "Bearer $($createAccessTokenResonse.access_token)"
         "Accept"          = "application/json"
         "Content-Type"    = "application/json;charset=utf-8"
         "Mwp-Api-Version" = "1.0"
     }
-    
+  
     Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
     #endregion Create headers
 
-    #region Get Groups
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups
-    $actionMessage = "querying groups"
+    if ($actionContext.Operation.ToLower() -ne "create") {
+        #region Verify account reference
+        $actionMessage = "verifying account reference"
+  
+        if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+            throw "The account reference could not be found"
+        }
+        #endregion Verify account reference
+    }
+    foreach ($fieldToCheck in $fieldsToCheck.PsObject.Properties | Where-Object { -not[String]::IsNullOrEmpty($_.Value.accountValue) }) {
+        #region Get account
+        # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users
+        $actionMessage = "querying account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]"
 
-    $kpnLisaGroups = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaGroupsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups"
+        $filter = "$($fieldToCheck.Name) eq '$($fieldToCheck.Value.accountValue)'" 
+        if (($fieldToCheck.Value.crossCheckOn | Measure-Object).Count -ge 1) {
+            foreach ($fieldToCrossCheckOn in $fieldToCheck.Value.crossCheckOn) {
+                $filter = $filter + " OR $($fieldToCrossCheckOn) eq '$($fieldToCheck.Value.accountValue)'"
+            }
+        }
+
+        $getKPNLisaAccountSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users"
             Method      = "GET"
             Body        = @{
-                Top       = 999
-                SkipToken = $Null
+                filter = "$filter"
+                select = "id,$($fieldToCheck.Name)"
             }
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink')) {
-            $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
-        }
 
-        Write-Verbose "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
-        $getKPNLisaGroupsSplatParams['Headers'] = $headers
+        $getKPNLisaAccountSplatParams['Headers'] = $headers
 
-        $getKPNLisaGroupsResponse = $null
-        $getKPNLisaGroupsResponse = Invoke-RestMethod @getKPNLisaGroupsSplatParams
-
-        if ($getKPNLisaGroupsResponse.Value -is [array]) {
-            [void]$kpnLisaGroups.AddRange($getKPNLisaGroupsResponse.Value)
-        }
-        else {
-            [void]$kpnLisaGroups.Add($getKPNLisaGroupsResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink'))
-
-    # Filter out onPremisesSyncEnabled groups as they can only be managed onPremises
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.onPremisesSyncEnabled -ne $true }
+        $getKPNLisaAccountResponse = $null
+        $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
+        $correlatedAccount = $getKPNLisaAccountResponse.Value
     
-    # Filter out grouptypes that cannot be managed from Lisa
-    $unSupportedGroupTypes = @("SoftwareUpdatePolicy", "MWP_DeviceDeploymentProfile", "MWP_UserWorkspaceProfile")
-    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.groupType -notin $unSupportedGroupTypes }
+        Write-Verbose "Queried account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]. Result: $($correlatedAccount | ConvertTo-Json)"
+        #endregion Get account
 
-    Write-Information "Queried groups. Result count: $(($kpnLisaGroups | Measure-Object).Count)"
-    #endregion Get Groups
-
-    #region Send results to HelloID
-    $kpnLisaGroups | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "$($_.groupType) - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
+        #region Check property uniqueness
+        $actionMessage = "checking if property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique"
+        if (($correlatedAccount | Measure-Object).count -gt 0) {
+            if ($actionContext.Operation.ToLower() -ne "create" -and $correlatedAccount.id -eq $actionContext.References.Account) {
+                Write-Verbose "Person is using property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] themselves."
+            }
+            else {
+                Write-Verbose "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique."
+                Write-Verbose "In use by: $($correlatedAccount | ConvertTo-Json)."
+                [void]$outputContext.NonUniqueFields.Add($fieldToCheck.Name)
         
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id   = $_.id
-                    Name = $_.displayName
-                    Type = $_.groupType
+                if (($fieldToCheck.Value.keepInSyncWith | Measure-Object).Count -ge 1) {
+                    foreach ($fieldToKeepInSyncWith in $fieldToCheck.Value.keepInSyncWith | Where-Object { $_ -in $actionContext.Data.PsObject.Properties }) {
+                        [void]$outputContext.NonUniqueFields.Add($fieldToKeepInSyncWith)
+                    }
                 }
             }
-        )
+        }
+        elseif (($correlatedAccount | Measure-Object).count -eq 0) {
+            Write-Verbose "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique."
+        }
+        #endregion Check property uniqueness
     }
-    #endregion Send results to HelloID
+
+    # Set Success to true
+    $outputContext.Success = $true
 }
 catch {
     $ex = $PSItem
@@ -218,8 +239,11 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
+    # Set Success to false
+    $outputContext.Success = $false
+
     Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
+    # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
 }

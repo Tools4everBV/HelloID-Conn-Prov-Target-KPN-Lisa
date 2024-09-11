@@ -1,191 +1,219 @@
-###################################################################
-# HelloID-Conn-Prov-Target-KPNLisa-Licenses-Permissions
+#################################################
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
+# List licenses as permissions
 # PowerShell V2
-###################################################################
+#################################################
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+# Set debug logging
+switch ($actionContext.Configuration.isDebug) {
+    $true { $VerbosePreference = "Continue" }
+    $false { $VerbosePreference = "SilentlyContinue" }
+}
+$InformationPreference = "Continue"
+$WarningPreference = "Continue"
+
 #region functions
-function Get-LisaAccessToken {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $TenantId,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $ClientId,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $ClientSecret,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $Scope,
-
-        [Parameter()]
-        [switch]
-        $AsSecureString
-    )
-
-    try {
-        $SplatParams = @{
-            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
-            ContentType = "application/x-www-form-urlencoded"
-            Method      = "Post"
-            Body        = @{
-                grant_type    = "client_credentials"
-                client_id     = $ClientId
-                client_secret = $ClientSecret
-                scope         = $Scope
-            }
-        }
-        $Response = Invoke-RestMethod @SplatParams
-
-        if ($AsSecureString) {
-            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
-        }
-        else {
-            Write-Output ($Response.access_token)
-        }
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
-    }
-}
-
-
-function Get-LisaCollection {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]
-        $Uri,
-
-        [Parameter(Mandatory)]
-        [string]
-        $Endpoint,
-
-        [Parameter(Mandatory)]
-        [securestring]
-        $AccessToken
-    )
-
-    try {
-        Write-Verbose -Verbose "Setting authorizationHeaders"
-
-        $LisaRequest = @{
-            Authentication = "Bearer"
-            Token          = $AccessToken
-            ContentType    = "application/json; charset=utf-8"
-            Headers        = @{
-                "Mwp-Api-Version" = "1.0"
-            }
-        }
-
-        $SplatParams = @{
-            Uri    = "$($Uri)/$($Endpoint)"
-            Method = "Get"
-            Body   = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-        }
-
-        do {
-            $Result = Invoke-RestMethod @LisaRequest @SplatParams
-
-            $SplatParams.Body.SkipToken = $Result.nextLink
-
-            if ($Result -is [array]) {
-                Write-Output $Result
-            }
-            else {
-                Write-Output $Result.value
-            }
-        }
-        until([string]::IsNullOrWhiteSpace($Result.nextLink))
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
-    }
-}
-
-
-function Resolve-ErrorMessage {
+function Resolve-KPNLisaError {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory)]
         [object]
         $ErrorObject
     )
-
     process {
-        $Exception = [PSCustomObject]@{
-            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
-            RequestUri            = $ErrorObject.TargetObject.RequestUri
-            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = $Null
-            VerboseErrorMessage   = $Null
+        $httpErrorObj = [PSCustomObject]@{
+            ScriptLineNumber = $ErrorObject.InvocationInfo.ScriptLineNumber
+            Line             = $ErrorObject.InvocationInfo.Line
+            ErrorDetails     = $ErrorObject.Exception.Message
+            FriendlyMessage  = $ErrorObject.Exception.Message
         }
-
-        switch ($ErrorObject.Exception.GetType().FullName) {
-            "Microsoft.PowerShell.Commands.HttpResponseException" {
-                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
-                break
-            }
-            "System.Net.WebException" {
-                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
-                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
-                break
-            }
-            default {
-                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+        if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
+            $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
+        }
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            if ($null -ne $ErrorObject.Exception.Response) {
+                $streamReaderResponse = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                if (-not [string]::IsNullOrEmpty($streamReaderResponse)) {
+                    $httpErrorObj.ErrorDetails = $streamReaderResponse
+                }
             }
         }
+        try {
 
-        $Exception.VerboseErrorMessage = @(
-            "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
-            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join " "
+            $errorObjectConverted = $ErrorObject.ErrorDetails.Message | ConvertFrom-Json -ErrorAction Stop
 
-        Write-Output $Exception
+            if ($null -ne $errorObjectConverted.Error) {
+                if ($null -ne $errorObjectConverted.Error.Message) {
+                    $httpErrorObj.FriendlyMessage = $errorObjectConverted.Error.Message
+
+                    if ($null -ne $errorObjectConverted.Error.Code) { 
+                        $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Error code: $($errorObjectConverted.Error.Code)"
+                    }
+
+                    if ($null -ne $errorObjectConverted.ErrorDetails) { 
+                        $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Additional details: $($errorObjectConverted.ErrorDetails | ConvertTo-Json)"
+                    }
+                }
+                else {
+                    $httpErrorObj.FriendlyMessage = $errorObjectConverted.Error
+                }
+            }
+            else {
+                $httpErrorObj.FriendlyMessage = $ErrorObject
+            }
+        }
+        catch {
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
+        }
+        Write-Output $httpErrorObj
     }
+}
+
+function Convert-StringToBoolean($obj) {
+    if ($obj -is [PSCustomObject]) {
+        foreach ($property in $obj.PSObject.Properties) {
+            $value = $property.Value
+            if ($value -is [string]) {
+                $lowercaseValue = $value.ToLower()
+                if ($lowercaseValue -eq "true") {
+                    $obj.$($property.Name) = $true
+                }
+                elseif ($lowercaseValue -eq "false") {
+                    $obj.$($property.Name) = $false
+                }
+            }
+            elseif ($value -is [PSCustomObject] -or $value -is [System.Collections.IDictionary]) {
+                $obj.$($property.Name) = Convert-StringToBoolean $value
+            }
+            elseif ($value -is [System.Collections.IList]) {
+                for ($i = 0; $i -lt $value.Count; $i++) {
+                    $value[$i] = Convert-StringToBoolean $value[$i]
+                }
+                $obj.$($property.Name) = $value
+            }
+        }
+    }
+    return $obj
 }
 #endregion functions
 
-
-# Start Script
-try {
-    # Getting accessToken
-    $AccessToken = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
-
-    $SplatParams = @{
-        Uri         = $actionContext.Configuration.BaseUrl
-        Endpoint    = "Licenses"
-        AccessToken = $AccessToken
+try {  
+    #region Create access token
+    $actionMessage = "creating access token"
+    
+    $createAccessTokenBody = @{
+        grant_type    = "client_credentials"
+        client_id     = $actionContext.Configuration.EntraIDAppId
+        client_secret = $actionContext.Configuration.EntraIDAppSecret
+        scope         = $actionContext.Configuration.KPNMWPScope
     }
-    $Licenses = Get-LisaCollection @SplatParams
+    
+    $createAccessTokenSplatParams = @{
+        Uri             = "https://login.microsoftonline.com/$($actionContext.Configuration.EntraIDTenantID)/oauth2/v2.0/token/"
+        Headers         = $headers
+        Method          = "POST"
+        ContentType     = "application/x-www-form-urlencoded"
+        UseBasicParsing = $true
+        Body            = $createAccessTokenBody
+        Verbose         = $false
+        ErrorAction     = "Stop"
+    }
+    
+    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
+    
+    Write-Verbose "Created access token. Result: $($createAccessTokenResonse | ConvertTo-Json)"
+    #endregion Create access token
+    
+    #region Create headers
+    $actionMessage = "creating headers"
+    
+    $headers = @{
+        "Authorization"   = "Bearer $($createAccessTokenResonse.access_token)"
+        "Accept"          = "application/json"
+        "Content-Type"    = "application/json;charset=utf-8"
+        "Mwp-Api-Version" = "1.0"
+    }
+    
+    Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
+    #endregion Create headers
 
-    $Licenses | ForEach-Object {
-        $DisplayName = "License - $($PSItem.DisplayName)"
+    #region Get Licenses
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
+    $actionMessage = "querying licenses"
 
-        $outputContext.Permissions.Add([PSCustomObject]@{
-                DisplayName    = $DisplayName -replace '(?<=^.{100}).+' # Shorten DisplayName to max. 100 chars
-                Identification = @{
-                    Reference = $PSItem.skuId
+    $kpnLisaLicenses = [System.Collections.ArrayList]@()
+    do {
+        $getKPNLisaLicensesSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
+            Method      = "GET"
+            Body        = @{
+                Top       = 999
+                SkipToken = $Null
+            }
+            Verbose     = $false
+            ErrorAction = "Stop"
+        }
+        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
+            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
+        }
+
+        Write-Verbose "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+
+        # Add header after printing splat
+        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+
+        $getKPNLisaLicensesResponse = $null
+        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+
+        if ($getKPNLisaLicensesResponse.Value -is [array]) {
+            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
+        }
+        else {
+            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
+        }
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
+
+    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
+    #endregion Get Licenses
+
+    #region Send results to HelloID
+    $kpnLisaLicenses | ForEach-Object {
+        # Shorten DisplayName to max. 100 chars
+        $displayName = "License - $($_.displayName)"
+        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
+        
+        $outputContext.Permissions.Add(
+            @{
+                displayName    = $displayName
+                identification = @{
+                    Id            = $_.id
+                    Name          = $_.displayName
+                    SkuId         = $_.skuId
+                    SkuPartNumber = $_.skuPartNumber
                 }
-            })
+            }
+        )
     }
+    #endregion Send results to HelloID
 }
 catch {
-    $Exception = $PSItem | Resolve-ErrorMessage
+    $ex = $PSItem
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorObj = Resolve-KPNLisaError -ErrorObject $ex
+        $auditMessage = "Error $($actionMessage). Error: $($errorObj.FriendlyMessage)"
+        $warningMessage = "Error at Line [$($errorObj.ScriptLineNumber)]: $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+    }
+    else {
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+    }
 
-    Write-Verbose -Verbose $Exception.VerboseErrorMessage
+    Write-Warning $warningMessage
 
-    throw $Exception.ErrorMessage
+    # Required to write an error as the listing of permissions doesn't show auditlog
+    Write-Error $auditMessage
 }

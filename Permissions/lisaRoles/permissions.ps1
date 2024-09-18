@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Teams-List
-# List teams as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-LisaRoles-List
+# List lisa roles as permissions
 # PowerShell V2
 #################################################
 
@@ -131,14 +131,14 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
-    #region Get Teams
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/teams
-    $actionMessage = "querying teams"
+    #region Get LisaRoles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/lisaroles
+    $actionMessage = "querying lisa roles"
 
-    $kpnLisaTeams = [System.Collections.ArrayList]@()
+    $kpnLisaLisaRoles = [System.Collections.ArrayList]@()
     do {
-        $getKPNLisaTeamsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/teams"
+        $getKPNLisaLisaRolesSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/lisaroles"
             Method      = "GET"
             Body        = @{
                 Top       = 999
@@ -147,33 +147,33 @@ try {
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink')) {
-            $getKPNLisaTeamsSplatParams.Body.SkipToken = $getKPNLisaTeamsResponse.'nextLink'
+        if (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink')) {
+            $getKPNLisaLisaRolesSplatParams.Body.SkipToken = $getKPNLisaLisaRolesResponse.'nextLink'
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaTeamsSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($getKPNLisaLisaRolesSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
-        $getKPNLisaTeamsSplatParams['Headers'] = $headers
+        $getKPNLisaLisaRolesSplatParams['Headers'] = $headers
 
-        $getKPNLisaTeamsResponse = $null
-        $getKPNLisaTeamsResponse = Invoke-RestMethod @getKPNLisaTeamsSplatParams
+        $getKPNLisaLisaRolesResponse = $null
+        $getKPNLisaLisaRolesResponse = Invoke-RestMethod @getKPNLisaLisaRolesSplatParams
 
-        if ($getKPNLisaTeamsResponse.Value -is [array]) {
-            [void]$kpnLisaTeams.AddRange($getKPNLisaTeamsResponse.Value)
+        if ($getKPNLisaLisaRolesResponse.Value -is [array]) {
+            [void]$kpnLisaLisaRoles.AddRange($getKPNLisaLisaRolesResponse.Value)
         }
         else {
-            [void]$kpnLisaTeams.Add($getKPNLisaTeamsResponse.Value)
+            [void]$kpnLisaLisaRoles.Add($getKPNLisaLisaRolesResponse.Value)
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink'))
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink'))
 
-    Write-Information "Queried teams. Result count: $(($kpnLisaTeams | Measure-Object).Count)"
-    #endregion Get Teams
+    Write-Information "Queried lisa roles. Result count: $(($kpnLisaLisaRoles | Measure-Object).Count)"
+    #endregion Get LisaRoles
 
     #region Send results to HelloID
-    $kpnLisaTeams | ForEach-Object {
+    $kpnLisaLisaRoles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "Team - $($_.displayName)"
+        $displayName = "LisaRole - $($_.roleName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
@@ -181,7 +181,7 @@ try {
                 displayName    = $displayName
                 identification = @{
                     Id   = $_.id
-                    Name = $_.displayName
+                    Name = $_.roleName
                 }
             }
         )

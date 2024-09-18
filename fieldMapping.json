@@ -2,23 +2,36 @@
     "Version": "v1",
     "MappingFields": [
         {
-            "Name": "changePasswordNextSignIn",
+            "Name": "jobTitle",
+            "Description": "The user's job title.\nMaximum length is 128 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
                     "MapForActions": [
-                        "Create"
+                        "Create",
+                        "Update"
                     ],
-                    "MappingMode": "Complex",
-                    "Value": "\"function getValue() {\\n    return true\\n}\\n\\ngetValue()\"",
+                    "MappingMode": "Field",
+                    "Value": "\"Person.PrimaryContract.Title.Name\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": false
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
                     "UsedInNotifications": false,
                     "StoreInAccountData": false
                 }
             ]
         },
         {
-            "Name": "companyName",
-            "Description": "The name of the company that the user is associated with. This property can be useful for describing the company that an external user comes from. The maximum length is 64 characters.",
+            "Name": "id",
+            "Description": "[Required] The unique identifier for the user. Read-only.\nUsed as AccountReference.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -26,32 +39,60 @@
                         "Create",
                         "Update"
                     ],
-                    "MappingMode": "Field",
-                    "Value": "\"Person.PrimaryContract.Organization.Name\"",
-                    "UsedInNotifications": true,
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
                     "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "department",
-            "Description": "The name of the department in which the user works. Maximum length is 64 characters.",
+            "Name": "usageLocation",
+            "Description": "A two-letter country code (ISO standard 3166). Required for users that are assigned licenses due to legal requirements to check for availability of services in countries.\nExamples include: US, JP, and GB. Not nullable.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create",
+                        "Update"
+                    ],
+                    "MappingMode": "Fixed",
+                    "Value": "\"NL\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": false
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": false
+                }
+            ]
+        },
+        {
+            "Name": "changePasswordNextSignIn",
+            "Description": "[Required] TRUE if the user must change their password on the next sign-in; otherwise FALSE.",
             "Type": "Text",
             "MappingActions": [
                 {
                     "MapForActions": [
                         "Create"
                     ],
-                    "MappingMode": "Field",
-                    "Value": "\"Person.PrimaryContract.Department.DisplayName\"",
-                    "UsedInNotifications": true,
-                    "StoreInAccountData": true
+                    "MappingMode": "Fixed",
+                    "Value": "\"FALSE\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": false
                 }
             ]
         },
         {
-            "Name": "displayName",
-            "Description": "The name displayed in the address book for the user. This is usually the combination of the user's first name, middle initial, and last name. This property is required when a user is created and it cannot be cleared during updates. Maximum length is 256 characters. ",
+            "Name": "officeLocation",
+            "Description": "The office location in the user's place of business.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -60,32 +101,26 @@
                         "Update"
                     ],
                     "MappingMode": "Field",
-                    "Value": "\"Person.DisplayName\"",
-                    "UsedInNotifications": true,
+                    "Value": "\"Person.PrimaryContract.Location.Name\"",
+                    "UsedInNotifications": false,
                     "StoreInAccountData": true
-                }
-            ]
-        },
-        {
-            "Name": "employeeId",
-            "Description": "The employee identifier assigned to the user by the organization. The maximum length is 16 characters.",
-            "Type": "Text",
-            "MappingActions": [
+                },
                 {
                     "MapForActions": [
-                        "Create",
-                        "Update"
+                        "Enable",
+                        "Disable",
+                        "Delete"
                     ],
-                    "MappingMode": "Field",
-                    "Value": "\"Person.ExternalId\"",
-                    "UsedInNotifications": true,
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
                     "StoreInAccountData": true
                 }
             ]
         },
         {
             "Name": "givenName",
-            "Description": "The given name (first name) of the user. Maximum length is 64 characters.",
+            "Description": "The given name (first name) of the user.\nMaximum length is 64 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -97,12 +132,51 @@
                     "Value": "\"Person.Name.NickName\"",
                     "UsedInNotifications": true,
                     "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "jobTitle",
-            "Description": "The user's job title. Maximum length is 128 characters. ",
+            "Name": "employeeId",
+            "Description": "The employee identifier assigned to the user by the organization.\nThe maximum length is 16 characters.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create"
+                    ],
+                    "MappingMode": "Field",
+                    "Value": "\"Person.ExternalId\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete",
+                        "Update"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                }
+            ]
+        },
+        {
+            "Name": "displayName",
+            "Description": "[Required] The name displayed in the address book for the user. This is usually the combination of the user's first name, middle initial, and last name.\nMaximum length is 256 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -110,16 +184,27 @@
                         "Create",
                         "Update"
                     ],
-                    "MappingMode": "Field",
-                    "Value": "\"Person.PrimaryContract.Title.Name\"",
+                    "MappingMode": "Complex",
+                    "Value": "\"// Mapping logic to generate the DisplayName according to the following convention.\\r\\n// First choice\\t        B\\tJanine van den boele\\r\\n// \\t                    BP\\tJanine van den Boele – de Vries\\r\\n// \\t                    P\\tJanine de Vries\\r\\n// \\t                    PB  Janine de Vries – van den Boele\\r\\nfunction generateDisplayName() {\\r\\n    let nickName = Person.Name.NickName;\\r\\n    let middleName = Person.Name.FamilyNamePrefix;\\r\\n    let lastName = Person.Name.FamilyName;\\r\\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\\r\\n    let lastNamePartner = Person.Name.FamilyNamePartner;\\r\\n    let convention = Person.Name.Convention;\\r\\n\\r\\n    let displayName = '';\\r\\n    switch (convention) {\\r\\n        case \\\"BP\\\":\\r\\n            displayName = displayName + nickName + ' ';\\r\\n            if (typeof middleName !== 'undefined' && middleName) { displayName = displayName + middleName + ' ' }\\r\\n            displayName = displayName + lastName;\\r\\n\\r\\n            displayName = displayName + ' - ';\\r\\n\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { displayName = displayName + middleNamePartner + ' ' }\\r\\n            displayName = displayName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"PB\\\":\\r\\n            displayName = displayName + nickName + ' ';\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { displayName = displayName + middleNamePartner + ' ' }\\r\\n            displayName = displayName + lastNamePartner;\\r\\n\\r\\n            displayName = displayName + ' - ';\\r\\n            if (typeof middleName !== 'undefined' && middleName) { displayName = displayName + middleName + ' ' }\\r\\n            displayName = displayName + lastName;\\r\\n            break;\\r\\n        case \\\"P\\\":\\r\\n            displayName = displayName + nickName + ' ';\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { displayName = displayName + middleNamePartner + ' ' }\\r\\n            displayName = displayName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"B\\\":\\r\\n        default:\\r\\n            displayName = displayName + nickName + ' ';\\r\\n            if (typeof middleName !== 'undefined' && middleName) { displayName = displayName + middleName + ' ' }\\r\\n            displayName = displayName + lastName;\\r\\n            break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    displayName = displayName.trim();\\r\\n\\r\\n    // Shorten string to maxAttributeLength minus iteration length\\r\\n    const maxAttributeLength = 256;\\r\\n    displayName = displayName.substring(0, maxAttributeLength);\\r\\n\\r\\n    return displayName;\\r\\n}\\r\\n\\r\\ngenerateDisplayName();\"",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": false
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
                     "UsedInNotifications": true,
                     "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "officeLocation",
-            "Description": "The office location in the user's place of business. ",
+            "Name": "department",
+            "Description": "The name of the department in which the user works.\nMaximum length is 64 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -129,46 +214,61 @@
                     ],
                     "MappingMode": "Field",
                     "Value": "\"Person.PrimaryContract.Department.DisplayName\"",
-                    "UsedInNotifications": true,
-                    "StoreInAccountData": false
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "preferredLanguage",
-            "Description": "The preferred language for the user. The preferred language format is based on RFC 4646. The name is a combination of an ISO 639 two-letter lowercase culture code associated with the language and an ISO 3166 two-letter uppercase subculture code associated with the country or region. Example: \"en-US\", or \"es-ES\". ",
+            "Name": "accountEnabled",
+            "Description": "[Required] TRUE if the account is enabled; otherwise, FALSE.",
             "Type": "Text",
             "MappingActions": [
                 {
                     "MapForActions": [
-                        "Create"
+                        "Enable"
                     ],
                     "MappingMode": "Fixed",
-                    "Value": "\"nl-NL\"",
+                    "Value": "\"TRUE\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": false
-                }
-            ]
-        },
-        {
-            "Name": "usageLocation",
-            "Description": "A two-letter country code (ISO standard 3166). Required for users that are assigned licenses due to legal requirements to check for availability of services in countries. Examples include: US, JP, and GB. Not nullable.",
-            "Type": "Text",
-            "MappingActions": [
+                    "StoreInAccountData": true
+                },
                 {
                     "MapForActions": [
-                        "Create"
+                        "Create",
+                        "Disable"
                     ],
                     "MappingMode": "Fixed",
-                    "Value": "\"NL\"",
+                    "Value": "\"FALSE\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": false
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Delete",
+                        "Update"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "surName",
-            "Description": "The user's surname (family name or last name). Maximum length is 64 characters. ",
+            "Name": "surname",
+            "Description": "The user's surname (family name or last name).\nMaximum length is 64 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -177,15 +277,82 @@
                         "Update"
                     ],
                     "MappingMode": "Complex",
-                    "Value": "\"function generateLastName() {\\n\\n    let birthName = [\\n        Person.Name.FamilyNamePrefix,\\n        Person.Name.FamilyName\\n    ].join(' ');\\n\\n    let partnerName = [\\n        Person.Name.FamilyNamePartnerPrefix,\\n        Person.Name.FamilyNamePartner\\n    ].join(' ');\\n    \\n    switch(Person.Name.Convention) {\\n        case \\\"B\\\":\\n            return birthName;\\n\\n        case \\\"P\\\":\\n            return partnerName;\\n\\n        case \\\"BP\\\":\\n            return [birthName, partnerName]\\n                .filter(function(x) {\\n                    return x !== \\\"\\\"\\n                })\\n                .join('-');\\n\\n        case \\\"PB\\\":\\n            return [partnerName, birthName]\\n                .filter(function(x) {\\n                    return x !== \\\"\\\"\\n                })\\n                .join('-');\\n\\n        default:\\n            return birthName;\\n    }\\n}\\n \\ngenerateLastName();\"",
+                    "Value": "\"// Mapping logic to generate the Surname according to the following convention.\\r\\n// First choice\\t        B\\tvan den boele\\r\\n// \\t                    BP\\tvan den Boele – de Vries\\r\\n// \\t                    P\\tde Vries\\r\\n// \\t                    PB  de Vries – van den Boele\\r\\nfunction generateSurname() {\\r\\n    let middleName = Person.Name.FamilyNamePrefix;\\r\\n    let lastName = Person.Name.FamilyName;\\r\\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\\r\\n    let lastNamePartner = Person.Name.FamilyNamePartner;\\r\\n\\r\\n    let convention = Person.Name.Convention;\\r\\n\\r\\n    let maxAttributeLength = 64;\\r\\n\\r\\n    let surname = '';\\r\\n    switch (convention) {\\r\\n        case \\\"BP\\\":\\r\\n            if (typeof middleName !== 'undefined' && middleName) { surname = surname + middleName + ' ' }\\r\\n            surname = surname + lastName;\\r\\n\\r\\n            surname = surname + ' - ';\\r\\n\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { surname = surname + middleNamePartner + ' ' }\\r\\n            surname = surname + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"PB\\\":\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { surname = surname + middleNamePartner + ' ' }\\r\\n            surname = surname + lastNamePartner;\\r\\n\\r\\n            surname = surname + ' - ';\\r\\n            if (typeof middleName !== 'undefined' && middleName) { surname = surname + middleName + ' ' }\\r\\n            surname = surname + lastName;\\r\\n            break;\\r\\n        case \\\"P\\\":\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { surname = surname + middleNamePartner + ' ' }\\r\\n            surname = surname + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"B\\\":\\r\\n        default:\\r\\n            if (typeof middleName !== 'undefined' && middleName) { surname = surname + middleName + ' ' }\\r\\n            surname = surname + lastName;\\r\\n            break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    surname = surname.trim();\\r\\n\\r\\n    // Shorten string to maxAttributeLength minus iteration length\\r\\n    surname = surname.substring(0, maxAttributeLength);\\r\\n\\r\\n    return surname;\\r\\n}\\r\\n\\r\\ngenerateSurname();\"",
                     "UsedInNotifications": true,
                     "StoreInAccountData": false
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
                 }
             ]
         },
         {
             "Name": "userPrincipalName",
-            "Description": "The user principal name (UPN) of the user. The UPN is an Internet-style sign-in name for the user based on the Internet standard RFC 822. By convention, this should map to the user's email name. The general format is alias@domain, where the domain must be present in the tenant's collection of verified domains. This property is required when a user is created. The verified domains for the tenant can be accessed from the verifiedDomains property of organization.",
+            "Description": "[Required] The user principal name (UPN) of the user. The UPN is an Internet-style sign-in name for the user based on the Internet standard RFC 822. By convention, this should map to the user's email name. The general format is alias@domain, where the domain must be present in the tenant's collection of verified domains.\nNOTE: This property can't contain accent characters. Only the following characters are allowed A - Z, a - z, 0 - 9, ' . - _ ! # ^ ~.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create"
+                    ],
+                    "MappingMode": "Complex",
+                    "Value": "\"// Mapping logic to generate the UserPrincipalName according to the following convention.\\r\\n// First choice\\t        B\\tjanine.vandenboele\\r\\n// \\t                    BP\\tjanine.vandenboele\\r\\n// \\t                    P\\tjanine.devries\\r\\n// \\t                    PB  janine.devries\\r\\n// If in use\\t        B\\tjanine_vandenboele\\r\\n// \\t                    BP\\tjanine_vandenboele\\r\\n// \\t                    P\\tjanine_devries\\r\\n// \\t                    PB  janine_devries\\r\\n// If also in use   \\tB\\tj.vandenboele\\r\\n// \\t                    BP\\tj.vandenboele\\r\\n// \\t                    P\\tj.devries\\r\\n// \\t                    PB  j.devries\\r\\n// If also in use   \\tB\\tj_vandenboele\\r\\n// \\t                    BP\\tj_vandenboele\\r\\n// \\t                    P\\tj_devries\\r\\n// \\t                    PB  j_devries\\r\\n// If also in use   \\tB\\tj_vandenboele2\\r\\n// \\t                    BP\\tj_vandenboele2\\r\\n// \\t                    P\\tj_devries2\\r\\n// \\t                    PB  j_devries2\\r\\n// Etc.\\r\\nfunction generateUserPrincipalName() {\\r\\n    let nickName = Person.Name.NickName;\\r\\n    let middleName = Person.Name.FamilyNamePrefix;\\r\\n    let lastName = Person.Name.FamilyName;\\r\\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\\r\\n    let lastNamePartner = Person.Name.FamilyNamePartner;\\r\\n    let convention = Person.Name.Convention;\\r\\n\\r\\n    let mailNickName = '';\\r\\n    if (Iteration === 0) {\\r\\n        mailNickName = mailNickName + nickName + '.';\\r\\n    } else if (Iteration === 1) {\\r\\n        mailNickName = mailNickName + nickName + '_';\\r\\n    } else if (Iteration === 2) {\\r\\n        mailNickName = mailNickName + nickName.substring(0, 1) + '.';\\r\\n    } else {\\r\\n        mailNickName = mailNickName + nickName.substring(0, 1) + '_';\\r\\n    }\\r\\n\\r\\n    switch (convention) {\\r\\n        case \\\"P\\\":\\r\\n        case \\\"PB\\\":\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { mailNickName = mailNickName + middleNamePartner }\\r\\n            mailNickName = mailNickName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"B\\\":\\r\\n        case \\\"BP\\\":\\r\\n        default:\\r\\n            if (typeof middleName !== 'undefined' && middleName) { mailNickName = mailNickName + middleName }\\r\\n            mailNickName = mailNickName + lastName;\\r\\n            break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    mailNickName = mailNickName.trim();\\r\\n\\r\\n    // Convert to lower case\\r\\n    mailNickName = mailNickName.toLowerCase();\\r\\n\\r\\n    // Remove diacritical chars\\r\\n    mailNickName = deleteDiacriticalMarks(mailNickName);\\r\\n\\r\\n    // Remove blank chars and \\\"'\\\"\\r\\n    mailNickName = mailNickName.replace(/[^0-9a-zA-Z.\\\\-_]/g, '');\\r\\n\\r\\n    // Shorten string to maxAttributeLength minus iteration length\\r\\n    const domain = 'consultancytest.onmicrosoft.com';\\r\\n    const maxAttributeLength = (256 - domain.toString().length);\\r\\n    mailNickName = mailNickName.substring(0, maxAttributeLength);\\r\\n\\r\\n    // Use the iterator if needed\\r\\n    const suffix = Iteration <= 3 ? '' : (Iteration - 2);\\r\\n    mailNickName = mailNickName + suffix;\\r\\n\\r\\n    return mailNickName + '@' + domain;\\r\\n}\\r\\n\\r\\ngenerateUserPrincipalName();\"",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete",
+                        "Update"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
+                }
+            ]
+        },
+        {
+            "Name": "mail",
+            "Description": "The SMTP address for the user, for example, jeff@contoso.com. Changes to this property update the user's proxyAddresses collection to include the value as an SMTP address.\nNOTE: This property can't contain accent characters. Only the following characters are allowed A - Z, a - z, 0 - 9, ' . - _ ! # ^ ~.\nNOTE: We don't recommend updating this property for Azure AD B2C user profiles. Use the otherMails property instead.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create"
+                    ],
+                    "MappingMode": "Complex",
+                    "Value": "\"// Mapping logic to generate the Mail according to the following convention.\\r\\n// First choice\\t        B\\tjanine.vandenboele\\r\\n// \\t                    BP\\tjanine.vandenboele\\r\\n// \\t                    P\\tjanine.devries\\r\\n// \\t                    PB  janine.devries\\r\\n// If in use\\t        B\\tjanine_vandenboele\\r\\n// \\t                    BP\\tjanine_vandenboele\\r\\n// \\t                    P\\tjanine_devries\\r\\n// \\t                    PB  janine_devries\\r\\n// If also in use   \\tB\\tj.vandenboele\\r\\n// \\t                    BP\\tj.vandenboele\\r\\n// \\t                    P\\tj.devries\\r\\n// \\t                    PB  j.devries\\r\\n// If also in use   \\tB\\tj_vandenboele\\r\\n// \\t                    BP\\tj_vandenboele\\r\\n// \\t                    P\\tj_devries\\r\\n// \\t                    PB  j_devries\\r\\n// If also in use   \\tB\\tj_vandenboele2\\r\\n// \\t                    BP\\tj_vandenboele2\\r\\n// \\t                    P\\tj_devries2\\r\\n// \\t                    PB  j_devries2\\r\\n// Etc.\\r\\nfunction generateMail() {\\r\\n    let nickName = Person.Name.NickName;\\r\\n    let middleName = Person.Name.FamilyNamePrefix;\\r\\n    let lastName = Person.Name.FamilyName;\\r\\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\\r\\n    let lastNamePartner = Person.Name.FamilyNamePartner;\\r\\n    let convention = Person.Name.Convention;\\r\\n\\r\\n    let mailNickName = '';\\r\\n    if (Iteration === 0) {\\r\\n        mailNickName = mailNickName + nickName + '.';\\r\\n    } else if (Iteration === 1) {\\r\\n        mailNickName = mailNickName + nickName + '_';\\r\\n    } else if (Iteration === 2) {\\r\\n        mailNickName = mailNickName + nickName.substring(0, 1) + '.';\\r\\n    } else {\\r\\n        mailNickName = mailNickName + nickName.substring(0, 1) + '_';\\r\\n    }\\r\\n\\r\\n    switch (convention) {\\r\\n        case \\\"P\\\":\\r\\n        case \\\"PB\\\":\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { mailNickName = mailNickName + middleNamePartner }\\r\\n            mailNickName = mailNickName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"B\\\":\\r\\n        case \\\"BP\\\":\\r\\n        default:\\r\\n            if (typeof middleName !== 'undefined' && middleName) { mailNickName = mailNickName + middleName }\\r\\n            mailNickName = mailNickName + lastName;\\r\\n            break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    mailNickName = mailNickName.trim();\\r\\n\\r\\n    // Convert to lower case\\r\\n    mailNickName = mailNickName.toLowerCase();\\r\\n\\r\\n    // Remove diacritical chars\\r\\n    mailNickName = deleteDiacriticalMarks(mailNickName);\\r\\n\\r\\n    // Remove blank chars and \\\"'\\\"\\r\\n    mailNickName = mailNickName.replace(/[^0-9a-zA-Z.\\\\-_]/g, '');\\r\\n\\r\\n    // Shorten string to maxAttributeLength minus iteration length\\r\\n    const domain = 'consultancytest.onmicrosoft.com';\\r\\n    const maxAttributeLength = (256 - domain.toString().length);\\r\\n    mailNickName = mailNickName.substring(0, maxAttributeLength);\\r\\n\\r\\n    // Use the iterator if needed\\r\\n    const suffix = Iteration <= 3 ? '' : (Iteration - 2);\\r\\n    mailNickName = mailNickName + suffix;\\r\\n\\r\\n    return mailNickName + '@' + domain;\\r\\n}\\r\\n\\r\\ngenerateMail();\"",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete",
+                        "Update"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
+                }
+            ]
+        },
+        {
+            "Name": "managerId",
+            "Description": "[Required] The unique identifier for the user of the manager. Read-only.\nThis is set with a 'none' mapping, so we can set the value within the create script.",
             "Type": "Text",
             "MappingActions": [
                 {
@@ -193,8 +360,36 @@
                         "Create",
                         "Update"
                     ],
+                    "MappingMode": "None",
+                    "Value": "\"\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                }
+            ]
+        },
+        {
+            "Name": "mobilePhone",
+            "Description": "The primary cellular telephone number for the user.\nRead-only for users synced from the on-premises directory.\nMaximum length is 64 characters.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create"
+                    ],
                     "MappingMode": "Complex",
-                    "Value": "\"function generateUserPrincipalName() {\\n    const domain = 'yourdomainhere';\\n    const suffix = Iteration === 0 ? '' : Iteration;\\n\\n    let firstName = Person.Name.NickName.trim();\\n\\n    let lastName = ''\\n\\n    if ([\\\"P\\\", \\\"PB\\\"].includes(Person.Name.Convention)) {\\n        lastName = [\\n            Person.Name.FamilyNamePartnerPrefix,\\n            Person.Name.FamilyNamePartner\\n        ].join(' ')\\n    }\\n    else {\\n        lastName = [\\n            Person.Name.FamilyNamePrefix,\\n            Person.Name.FamilyName\\n        ].join(' ')\\n    }\\n        \\n    let userPrincipalName = [firstName, lastName]\\n        // Filter empty values\\n        .filter(function(x) {return x !== \\\"\\\"})\\n        // Join values to single string\\n        .join(' ')\\n        //Change whitespaces to dots\\n        .replace(/\\\\s+/g, '.')\\n        //Convert to lower case\\n        .toLowerCase()\\n    \\n    //Remove diacritical chars\\n    userPrincipalName = deleteDiacriticalMarks(userPrincipalName)\\n\\t    //Remove specific chars    \\n        .replace(/[^0-9a-zA-Z.']/g, '')\\n        .concat(suffix, '@', domain)\\n\\n    return userPrincipalName\\n}\\n\\ngenerateUserPrincipalName();\"",
+                    "Value": "\"// Mapping logic to generate the mobilePhone.\\r\\n// Use business mobile by default, if empty, use personal mobile\\r\\nfunction generateMobilePhone() {\\r\\n    const businessMobile = Person.Contact.Business.Phone.Mobile;\\r\\n    const personalMobile = Person.Contact.Personal.Phone.Mobile;\\r\\n\\r\\n    let mobilePhone = businessMobile || personalMobile;\\r\\n\\r\\n    return mobilePhone;\\r\\n}\\r\\n\\r\\ngenerateMobilePhone();\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Update",
+                        "Disable",
+                        "Delete"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "null",
                     "UsedInNotifications": false,
                     "StoreInAccountData": true
                 }
@@ -202,30 +397,56 @@
         },
         {
             "Name": "businessPhones",
-            "Description": "The telephone numbers for the user.\n\nNOTE: Although it is a string collection, only one number can be set for this property.",
+            "Description": "The telephone numbers for the user.\nNOTE: Although it is a string collection, only one number can be set for this property.\nRead-only for users synced from the on-premises directory.",
             "Type": "Array",
             "MappingActions": [
                 {
                     "MapForActions": [
-                        "Create",
-                        "Update"
+                        "Create"
                     ],
                     "MappingMode": "Complex",
-                    "Value": "\"function getValue() {\\n    return [Person.Contact.Business.Phone.Mobile]\\n}\\n\\ngetValue()\"",
+                    "Value": "\"// Mapping logic to generate the BusinessPhones as a string collection.\\r\\nfunction generateBusinessPhones() {\\r\\n    const businessMobile = Person.Contact.Business.Phone.Mobile;\\r\\n\\r\\n    let businessPhones = [];\\r\\n\\r\\n    if (businessMobile) {\\r\\n        businessPhones.push(businessMobile);\\r\\n    }\\r\\n\\r\\n    return businessPhones;\\r\\n}\\r\\n\\r\\ngenerateBusinessPhones();\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": false
+                    "StoreInAccountData": true
                 }
             ]
         },
         {
-            "Name": "mail",
-            "Description": "Setting the mapping to 'None' will force the UPN in this field.\n\nThe SMTP address for the user, for example, jeff@contoso.onmicrosoft.com. Changes to this property update the user's proxyAddresses collection to include the value as an SMTP address. This property can't contain accent characters.\n\nNOTE: We don't recommend updating this property for Azure AD B2C user profiles. Use the otherMails property instead.",
+            "Name": "password",
+            "Description": "[Optional] The automatically generated password by KPN Lisa. Read-only.\nThis is set with a 'none' mapping, so we can set the value within the create script.",
+            "Type": "Text",
+            "MappingActions": [
+                {
+                    "MapForActions": [
+                        "Create"
+                    ],
+                    "MappingMode": "None",
+                    "Value": "\"\"",
+                    "UsedInNotifications": true,
+                    "StoreInAccountData": true
+                }
+            ]
+        },
+        {
+            "Name": "companyName",
+            "Description": "The name of the company that the user is associated with. This property can be useful for describing the company that an external user comes from.\nThe maximum length is 64 characters.",
             "Type": "Text",
             "MappingActions": [
                 {
                     "MapForActions": [
                         "Create",
                         "Update"
+                    ],
+                    "MappingMode": "Field",
+                    "Value": "\"Person.PrimaryContract.Employer.Name\"",
+                    "UsedInNotifications": false,
+                    "StoreInAccountData": true
+                },
+                {
+                    "MapForActions": [
+                        "Enable",
+                        "Disable",
+                        "Delete"
                     ],
                     "MappingMode": "None",
                     "Value": "\"\"",

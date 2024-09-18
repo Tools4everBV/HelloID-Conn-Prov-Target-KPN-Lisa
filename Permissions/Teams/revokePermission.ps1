@@ -140,7 +140,7 @@ try {
     #endregion Create headers
 
     #region Remove account from team
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/users/{identifier}/teams/{memberId}
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/Personas/{identifier}/members/{memberId}
     $actionMessage = "revoking team [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
     $revokePermissionSplatParams = @{

@@ -140,7 +140,7 @@ try {
     #endregion Create headers
 
     #region Add account to persona
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: POST /api/users/{identifier}/personas
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: POST /api/Personas/{identifier}/members
     $actionMessage = "granting persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
     $grantPermissionSplatParams = @{

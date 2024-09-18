@@ -17,6 +17,7 @@
   - [Requirements](#requirements)
   - [Remarks](#remarks)
     - [Workspace Profile](#workspace-profile)
+    - [Persona](#persona)
     - [Manager Field in Field Mapping](#manager-field-in-field-mapping)
   - [Introduction](#introduction)
     - [API Endpoints](#api-endpoints)
@@ -45,6 +46,11 @@
 ### Workspace Profile
 
 - In KPN Lisa, a user can only have one WorkspaceProfile, so be careful not to add multiple profiles to a user. The revoke action will remove whatever workspaceProfile is active at the moment. This can result in unwanted behavior.
+
+
+### Persona
+
+- A user can have only one Persona in KPN Lisa. Assigning more than one will return an error. Ensure your Business Rules assign only a single Persona per user.
 
 
 ### Manager Field in Field Mapping
@@ -89,32 +95,43 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a target connector that uses KPN's REST A
 | [/api/workspaceprofiles](https://mwpapi.kpnwerkplek.com/index.html)                                     | List workspace profiles (GET)                   |
 | [/api/users/{identifier}/workspaceprofiles](https://mwpapi.kpnwerkplek.com/index.html)                  | Add workspace profile to user (POST)            |
 | [/api/users/{identifier}/workspaceprofiles](https://mwpapi.kpnwerkplek.com/index.html)                  | Remove workspace profile from user (DELETE)     |
-
+| [/api/personas](https://mwpapi.kpnwerkplek.com/index.html)                                              | List personas (GET)                             |
+| [/api/Personas/{identifier}/members](https://mwpapi.kpnwerkplek.com/index.html)                         | Add persona to user (POST)                      |
+| [/api/Personas/{identifier}/members/{memberId}](https://mwpapi.kpnwerkplek.com/index.html)              | Remove persona from user (DELETE)               |
 
 ### Actions
 
-| Action                                         | Description                                          | Comment                                                |
-| ---------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------ |
-| `create.ps1`                                   | Create (or update) and correlate a user account      |                                                        |
-| `enable.ps1`                                   | Enable a user account                                |                                                        |
-| `update.ps1`                                   | Update a user account                                |                                                        |
-| `disable.ps1`                                  | Disable a user account                               |                                                        |
-| `delete.ps1`                                   | Delete a user account                                | Be cautious; deleted users cannot be restored.         |
-| `groups - permissions.ps1`                     | Retrieve all groups and provide them as entitlements |                                                        |
-| `groups - grantPermission.ps1`                 | Add a group to a user account                        |                                                        |
-| `groups - revokePermission.ps1`                | Remove a group from a user account                   |                                                        |
-| `licenses - grantPermission.ps1`               | Assign a license to a user account                   |                                                        |
-| `licenses - revokePermission.ps1`              | Remove a license from a user account                 |                                                        |
-| `teams - grantPermission.ps1`                  | Add a user to a team                                 |                                                        |
-| `teams - revokePermission.ps1`                 | Remove a user from a team                            |                                                        |
-| `lisaroles - grantPermission.ps1`              | Assign a Lisa role to a user                         |                                                        |
-| `lisaroles - revokePermission.ps1`             | Remove a Lisa role from a user                       |                                                        |
-| `licenseprofiles - grantPermission.ps1`        | Assign a license profile to a user                   |                                                        |
-| `licenseprofiles - revokePermission.ps1`       | Remove a license profile from a user                 |                                                        |
-| `authorizationprofiles - grantPermission.ps1`  | Add an authorization profile to a user account       |                                                        |
-| `authorizationprofiles - revokePermission.ps1` | Remove an authorization profile from a user          |                                                        |
-| `workspaceprofiles - grantPermission.ps1`      | Assign a workspace profile to a user                 |                                                        |
-| `workspaceprofiles - revokePermission.ps1`     | Remove a workspace profile from a user account       | Be cautious; this removes the active WorkspaceProfile. |
+| Action                                         | Description                                                          | Comment                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
+| `create.ps1`                                   | Create (or update) and correlate a user account                      |                                                        |
+| `enable.ps1`                                   | Enable a user account                                                |                                                        |
+| `update.ps1`                                   | Update a user account                                                |                                                        |
+| `disable.ps1`                                  | Disable a user account                                               |                                                        |
+| `delete.ps1`                                   | Delete a user account                                                | Be cautious; deleted users cannot be restored.         |
+| `groups - permissions.ps1`                     | Retrieve all groups and provide them as entitlements                 |                                                        |
+| `groups - grantPermission.ps1`                 | Add a group to a user account                                        |                                                        |
+| `groups - revokePermission.ps1`                | Remove a group from a user account                                   |                                                        |
+| `licenses - permissions.ps1`                   | Retrieve all licenses and provide them as entitlements               |                                                        |
+| `licenses - grantPermission.ps1`               | Assign a license to a user account                                   |                                                        |
+| `licenses - revokePermission.ps1`              | Remove a license from a user account                                 |                                                        |
+| `teams - permissions.ps1`                      | Retrieve all teams and provide them as entitlements                  |                                                        |
+| `teams - grantPermission.ps1`                  | Add a user to a team                                                 |                                                        |
+| `teams - revokePermission.ps1`                 | Remove a user from a team                                            |                                                        |
+| `lisaroles - permissions.ps1`                  | Retrieve all Lisa roles and provide them as entitlements             |                                                        |
+| `lisaroles - grantPermission.ps1`              | Assign a Lisa role to a user                                         |                                                        |
+| `lisaroles - revokePermission.ps1`             | Remove a Lisa role from a user                                       |                                                        |
+| `licenseprofiles - permissions.ps1`            | Retrieve all license profiles and provide them as entitlements       |                                                        |
+| `licenseprofiles - grantPermission.ps1`        | Assign a license profile to a user                                   |                                                        |
+| `licenseprofiles - revokePermission.ps1`       | Remove a license profile from a user                                 |                                                        |
+| `authorizationprofiles - permissions.ps1`      | Retrieve all authorization profiles and provide them as entitlements |                                                        |
+| `authorizationprofiles - grantPermission.ps1`  | Add an authorization profile to a user account                       |                                                        |
+| `authorizationprofiles - revokePermission.ps1` | Remove an authorization profile from a user                          |                                                        |
+| `workspaceprofiles - permissions.ps1`          | Retrieve all workspace profiles and provide them as entitlements     |                                                        |
+| `workspaceprofiles - grantPermission.ps1`      | Assign a workspace profile to a user                                 |                                                        |
+| `workspaceprofiles - revokePermission.ps1`     | Remove a workspace profile from a user account                       | Be cautious; this removes the active WorkspaceProfile. |
+| `personas - permissions.ps1`                   | Retrieve all personas and provide them as entitlements               |                                                        |
+| `personas - grantPermission.ps1`               | Add a persona to a user account                                      |                                                        |
+| `personas - revokePermission.ps1`              | Remove a persona from a user account                                 |
 
 
 ## Getting Started

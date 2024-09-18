@@ -153,7 +153,7 @@ try {
 
     Write-Information "Queried personas. Result count: $(($kpnLisaPersonas | Measure-Object).Count)"
     #endregion Get Personas
-    
+
     #region Send results to HelloID
     $kpnLisaPersonas | ForEach-Object {
         # Shorten DisplayName to max. 100 chars

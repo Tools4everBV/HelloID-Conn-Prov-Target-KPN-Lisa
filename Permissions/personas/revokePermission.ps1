@@ -1,9 +1,9 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Teams-List
-# List teams as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Personas-Revoke
+# Revoke persona from account
 # PowerShell V2
 #################################################
-
+$actionContext.DryRun = $false
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
@@ -89,7 +89,15 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    #region Verify account reference
+    $actionMessage = "verifying account reference"
+    
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw "The account reference could not be found"
+    }
+    #endregion Verify account reference
+    
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -131,62 +139,64 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
-    #region Get Teams
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/teams
-    $actionMessage = "querying teams"
+    #region Get Persona Members
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/personas
+    $actionMessage = "querying persona member object"
 
-    $kpnLisaTeams = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaTeamsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/teams"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
+    $getKPNLisaPersonaMembersSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas/$($actionContext.References.Permission.id)/members"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
+
+    Write-Verbose "SplatParams: $($getKPNLisaPersonaMembersSplatParams | ConvertTo-Json)"
+
+    # Add header after printing splat
+    $getKPNLisaPersonaMembersSplatParams['Headers'] = $headers
+
+    $getKPNLisaPersonaMembersResponse = $null
+    $getKPNLisaPersonaMembersResponse = Invoke-RestMethod @getKPNLisaPersonaMembersSplatParams
+    $kpnLisaPersonaMemberObject = $getKPNLisaPersonaMembersResponse | Where-Object { $_.objectId -eq $($actionContext.References.Account) }
+
+    Write-Verbose "Queried persona member object. Result: $($kpnLisaPersonaMemberObject | ConvertTo-Json)"
+    #endregion Get Members of Persona
+
+    if ([string]::IsNullOrEmpty($kpnLisaPersonaMemberObject)) {
+        throw "No member found where [objectId] = [$($actionContext.References.Account)]."
+    }
+    else {
+        #region Remove account from persona
+        # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/Personas/{identifier}/members/{memberId}
+        $actionMessage = "revoking persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
+
+        $revokePermissionSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas/$($actionContext.References.Permission.id)/members/$($kpnLisaPersonaMemberObject.id)"
+            Method      = "DELETE"
+            ContentType = 'application/json; charset=utf-8'
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink')) {
-            $getKPNLisaTeamsSplatParams.Body.SkipToken = $getKPNLisaTeamsResponse.'nextLink'
-        }
 
-        Write-Verbose "SplatParams: $($getKPNLisaTeamsSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($revokePermissionSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaTeamsSplatParams['Headers'] = $headers
+        if (-Not($actionContext.DryRun -eq $true)) {
+            # Add header after printing splat
+            $revokePermissionSplatParams['Headers'] = $headers
 
-        $getKPNLisaTeamsResponse = $null
-        $getKPNLisaTeamsResponse = Invoke-RestMethod @getKPNLisaTeamsSplatParams
+            $revokePermissionResponse = Invoke-RestMethod @revokePermissionSplatParams
 
-        if ($getKPNLisaTeamsResponse.Value -is [array]) {
-            [void]$kpnLisaTeams.AddRange($getKPNLisaTeamsResponse.Value)
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    # Action  = "" # Optional
+                    Message = "Revoked persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                    IsError = $false
+                })
         }
         else {
-            [void]$kpnLisaTeams.Add($getKPNLisaTeamsResponse.Value)
+            Write-Warning "DryRun: Would revoke persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink'))
-
-    Write-Information "Queried teams. Result count: $(($kpnLisaTeams | Measure-Object).Count)"
-    #endregion Get Teams
-
-    #region Send results to HelloID
-    $kpnLisaTeams | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "Team - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id   = $_.id
-                    Name = $_.displayName
-                }
-            }
-        )
+        #endregion Remove account from persona
     }
-    #endregion Send results to HelloID
 }
 catch {
     $ex = $PSItem
@@ -201,8 +211,26 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    Write-Warning $warningMessage
+    if ($auditMessage -like "*No member found*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped revoking persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Reason: User is already no longer member of this persona."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
-    Write-Error $auditMessage
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
+}
+finally {
+    # Check if auditLogs contains errors, if no errors are found, set success to true
+    if (-NOT($outputContext.AuditLogs.IsError -contains $true)) {
+        $outputContext.Success = $true
+    }
 }

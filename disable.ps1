@@ -73,25 +73,14 @@ function Resolve-KPNLisaError {
 }
 
 function Convert-StringToBoolean($obj) {
-    if ($obj -is [PSCustomObject]) {
-        foreach ($property in $obj.PSObject.Properties) {
-            $value = $property.Value
-            if ($value -is [string]) {
-                $lowercaseValue = $value.ToLower()
-                if ($lowercaseValue -eq "true") {
-                    $obj.$($property.Name) = $true
-                }
-                elseif ($lowercaseValue -eq "false") {
-                    $obj.$($property.Name) = $false
-                }
+    foreach ($property in $obj.PSObject.Properties) {
+        $value = $property.Value
+        if ($value -is [string]) {
+            try {
+                $obj.$($property.Name) = [System.Convert]::ToBoolean($value)
             }
-            elseif ($value -is [PSCustomObject] -or $value -is [System.Collections.IDictionary]) {
-                $obj.$($property.Name) = Convert-StringToBoolean $value
-            }
-            elseif ($value -is [System.Collections.IList]) {
-                for ($i = 0; $i -lt $value.Count; $i++) {
-                    $value[$i] = Convert-StringToBoolean $value[$i]
-                }
+            catch {
+                # Handle cases where conversion fails
                 $obj.$($property.Name) = $value
             }
         }
@@ -102,10 +91,6 @@ function Convert-StringToBoolean($obj) {
 
 try {
     #region account
-    # Define correlation
-    $correlationField = "Id"
-    $correlationValue = $actionContext.References.Account
-
     # Define account object
     $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
 
@@ -157,25 +142,27 @@ try {
     
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Result: $($createAccessTokenResonse | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
     $actionMessage = "creating headers"
     
     $headers = @{
-        "Authorization"   = "Bearer $($createAccessTokenResonse.access_token)"
         "Accept"          = "application/json"
         "Content-Type"    = "application/json;charset=utf-8"
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
+    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+
+    # Add Authorization after printing splat
+    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
     #region Get account
     # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users/{identifier}
-    $actionMessage = "querying account where [$($correlationField)] = [$($correlationValue)]"
+    $actionMessage = "querying account with ID: $($actionContext.References.Account)"
 
     $getKPNLisaAccountSplatParams = @{
         Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($actionContext.References.Account)"
@@ -196,7 +183,7 @@ try {
     $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
     $correlatedAccount = $getKPNLisaAccountResponse
         
-    Write-Verbose "Queried account where [$($correlationField)] = [$($correlationValue)]. Result: $($correlatedAccount | ConvertTo-Json)"
+    Write-Verbose "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
     #endregion Get account
 
     #region Calulate action
@@ -240,8 +227,8 @@ try {
             }
 
             # Add the old properties to the custom object with old and new values
-            foreach ($accountoOldProperty in $accountOldProperties) {
-                $accountChangedPropertiesObject.OldValues.$($accountoOldProperty.Name) = $accountoOldProperty.Value
+            foreach ($accountOldProperty in $accountOldProperties) {
+                $accountChangedPropertiesObject.OldValues.$($accountOldProperty.Name) = $accountOldProperty.Value
             }
 
             # Add the new properties to the custom object with old and new values
@@ -341,7 +328,7 @@ try {
         
             $outputContext.AuditLogs.Add([PSCustomObject]@{
                     # Action  = "" # Optional
-                    Message = "Skipped updating account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Reason: No account found where [$($correlationField)] = [$($correlationValue)]. Possibly indicating that it could be deleted, or not correlated."
+                    Message = "Skipped updating account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Reason: No account found with ID: $($actionContext.References.Account). Possibly indicating that it could be deleted, or not correlated."
                     IsError = $true
                 })
             #endregion No account found
@@ -354,7 +341,7 @@ try {
             $actionMessage = "updating account"
 
             # Throw terminal error
-            throw "Multiple accounts found where [$($correlationField)] = [$($correlationValue)]. Please correct this to ensure the correlation results in a single unique account."
+            throw "Multiple accounts found with ID: $($actionContext.References.Account). Please correct this to ensure the correlation results in a single unique account."
             #endregion Multiple accounts found
 
             break
@@ -375,13 +362,22 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    Write-Warning $warningMessage
+    if ($auditMessage -like "*ResourceNotFound*" -and $auditMessage -like "*User with identifier $($actionContext.References.Account) not found*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped disabling account with ID: $($actionContext.References.Account). Reason: No account found with ID: $($actionContext.References.Account). Possibly indicating that it could be deleted, or not correlated."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
-            # Action  = "" # Optional
-            Message = $auditMessage
-            IsError = $true
-        })
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
 }
 finally {
     # Check if auditLogs contains errors, if no errors are found, set success to true

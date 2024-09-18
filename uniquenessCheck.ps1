@@ -73,25 +73,14 @@ function Resolve-KPNLisaError {
 }
 
 function Convert-StringToBoolean($obj) {
-    if ($obj -is [PSCustomObject]) {
-        foreach ($property in $obj.PSObject.Properties) {
-            $value = $property.Value
-            if ($value -is [string]) {
-                $lowercaseValue = $value.ToLower()
-                if ($lowercaseValue -eq "true") {
-                    $obj.$($property.Name) = $true
-                }
-                elseif ($lowercaseValue -eq "false") {
-                    $obj.$($property.Name) = $false
-                }
+    foreach ($property in $obj.PSObject.Properties) {
+        $value = $property.Value
+        if ($value -is [string]) {
+            try {
+                $obj.$($property.Name) = [System.Convert]::ToBoolean($value)
             }
-            elseif ($value -is [PSCustomObject] -or $value -is [System.Collections.IDictionary]) {
-                $obj.$($property.Name) = Convert-StringToBoolean $value
-            }
-            elseif ($value -is [System.Collections.IList]) {
-                for ($i = 0; $i -lt $value.Count; $i++) {
-                    $value[$i] = Convert-StringToBoolean $value[$i]
-                }
+            catch {
+                # Handle cases where conversion fails
                 $obj.$($property.Name) = $value
             }
         }
@@ -118,14 +107,14 @@ $fieldsToCheck = [PSCustomObject]@{
 try {
     #region Create access token
     $actionMessage = "creating access token"
-  
+    
     $createAccessTokenBody = @{
         grant_type    = "client_credentials"
         client_id     = $actionContext.Configuration.EntraIDAppId
         client_secret = $actionContext.Configuration.EntraIDAppSecret
         scope         = $actionContext.Configuration.KPNMWPScope
     }
-  
+    
     $createAccessTokenSplatParams = @{
         Uri             = "https://login.microsoftonline.com/$($actionContext.Configuration.EntraIDTenantID)/oauth2/v2.0/token/"
         Headers         = $headers
@@ -136,23 +125,25 @@ try {
         Verbose         = $false
         ErrorAction     = "Stop"
     }
-  
+    
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
-  
-    Write-Verbose "Created access token. Result: $($createAccessTokenResonse | ConvertTo-Json)"
+    
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
-  
+    
     #region Create headers
     $actionMessage = "creating headers"
-  
+    
     $headers = @{
-        "Authorization"   = "Bearer $($createAccessTokenResonse.access_token)"
         "Accept"          = "application/json"
         "Content-Type"    = "application/json;charset=utf-8"
         "Mwp-Api-Version" = "1.0"
     }
-  
-    Write-Verbose "Created headers. Result: $($headers | ConvertTo-Json)."
+    
+    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+
+    # Add Authorization after printing splat
+    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
     if ($actionContext.Operation.ToLower() -ne "create") {

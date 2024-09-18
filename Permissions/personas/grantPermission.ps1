@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Teams-List
-# List teams as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Personas-Grant
+# Grant persona to account
 # PowerShell V2
 #################################################
 
@@ -89,7 +89,15 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    #region Verify account reference
+    $actionMessage = "verifying account reference"
+    
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw "The account reference could not be found"
+    }
+    #endregion Verify account reference
+    
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -131,62 +139,38 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
-    #region Get Teams
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/teams
-    $actionMessage = "querying teams"
+    #region Add account to persona
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: POST /api/users/{identifier}/personas
+    $actionMessage = "granting persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
-    $kpnLisaTeams = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaTeamsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/teams"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink')) {
-            $getKPNLisaTeamsSplatParams.Body.SkipToken = $getKPNLisaTeamsResponse.'nextLink'
-        }
-
-        Write-Verbose "SplatParams: $($getKPNLisaTeamsSplatParams | ConvertTo-Json)"
-
-        # Add header after printing splat
-        $getKPNLisaTeamsSplatParams['Headers'] = $headers
-
-        $getKPNLisaTeamsResponse = $null
-        $getKPNLisaTeamsResponse = Invoke-RestMethod @getKPNLisaTeamsSplatParams
-
-        if ($getKPNLisaTeamsResponse.Value -is [array]) {
-            [void]$kpnLisaTeams.AddRange($getKPNLisaTeamsResponse.Value)
-        }
-        else {
-            [void]$kpnLisaTeams.Add($getKPNLisaTeamsResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink'))
-
-    Write-Information "Queried teams. Result count: $(($kpnLisaTeams | Measure-Object).Count)"
-    #endregion Get Teams
-
-    #region Send results to HelloID
-    $kpnLisaTeams | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "Team - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id   = $_.id
-                    Name = $_.displayName
-                }
-            }
-        )
+    $grantPermissionSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas/$($actionContext.References.Permission.id)/members"
+        Method      = "POST"
+        # Body is a single string, the id of the user
+        Body        = ("$($actionContext.References.Account)" | ConvertTo-Json -Depth 10)
+        ContentType = 'application/json; charset=utf-8'
+        Verbose     = $false
+        ErrorAction = "Stop"
     }
-    #endregion Send results to HelloID
+
+    Write-Verbose "SplatParams: $($grantPermissionSplatParams | ConvertTo-Json)"
+
+    if (-Not($actionContext.DryRun -eq $true)) {
+        # Add header after printing splat
+        $grantPermissionSplatParams['Headers'] = $headers
+
+        $grantPermissionResponse = Invoke-RestMethod @grantPermissionSplatParams
+
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Granted persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning "DryRun: Would grant persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+    }
+    #endregion Add account to persona
 }
 catch {
     $ex = $PSItem
@@ -201,8 +185,26 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    Write-Warning $warningMessage
+    if ($auditMessage -like "*MemberAlreadyHasAssignment*" -and $auditMessage -like "*already is assigned to persona '$($actionContext.References.Permission.Name)' with id '$($actionContext.References.Permission.id)'*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped $($actionMessage). Reason: User is already assigned to this persona."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
-    Write-Error $auditMessage
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
+}
+finally {
+    # Check if auditLogs contains errors, if no errors are found, set success to true
+    if (-NOT($outputContext.AuditLogs.IsError -contains $true)) {
+        $outputContext.Success = $true
+    }
 }

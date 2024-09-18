@@ -1,6 +1,6 @@
 #################################################
 # HelloID-Conn-Prov-Target-KPN-Lisa-Create
-# Create and update or correlate to account
+# Create and update and optionally set manager or correlate to account
 # PowerShell V2
 #################################################
 
@@ -152,7 +152,7 @@ try {
     
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expiresIn | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers

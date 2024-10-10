@@ -23,7 +23,7 @@
     - [API Endpoints](#api-endpoints)
     - [Actions](#actions)
   - [Getting Started](#getting-started)
-    - [Create a Provider in Zenya](#create-a-provider-in-zenya)
+    - [Create an Application in Entra ID](#create-an-application-in-entra-id)
     - [Set Up Permissions for KPN MWP API](#set-up-permissions-for-kpn-mwp-api)
     - [Provisioning PowerShell V2 connector](#provisioning-powershell-v2-connector)
       - [Correlation Configuration](#correlation-configuration)
@@ -136,7 +136,7 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a target connector that uses KPN's REST A
 
 ## Getting Started
 
-### Create a Provider in Zenya
+### Create an Application in Entra ID
 
 To use the HelloID-KPN Lisa connector, you must first create a **Microsoft Entra ID Application**.
 

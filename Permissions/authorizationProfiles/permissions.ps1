@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Teams-List
-# List teams as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-AuthorizationProfiles-List
+# List authorization profiles as permissions
 # PowerShell V2
 #################################################
 
@@ -131,49 +131,33 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
-    #region Get Teams
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/teams
-    $actionMessage = "querying teams"
+    #region Get AuthorizationProfiles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/authorizationprofiles
+    $actionMessage = "querying authorization profiles"
 
-    $kpnLisaTeams = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaTeamsSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/teams"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink')) {
-            $getKPNLisaTeamsSplatParams.Body.SkipToken = $getKPNLisaTeamsResponse.'nextLink'
-        }
+    $getKPNLisaAuthorizationProfilesSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/authorizationprofiles"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
 
-        Write-Verbose "SplatParams: $($getKPNLisaTeamsSplatParams | ConvertTo-Json)"
+    Write-Verbose "SplatParams: $($getKPNLisaAuthorizationProfilesSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaTeamsSplatParams['Headers'] = $headers
+    # Add header after printing splat
+    $getKPNLisaAuthorizationProfilesSplatParams['Headers'] = $headers
 
-        $getKPNLisaTeamsResponse = $null
-        $getKPNLisaTeamsResponse = Invoke-RestMethod @getKPNLisaTeamsSplatParams
+    $getKPNLisaAuthorizationProfilesResponse = $null
+    $getKPNLisaAuthorizationProfilesResponse = Invoke-RestMethod @getKPNLisaAuthorizationProfilesSplatParams
+    $kpnLisaAuthorizationProfiles = $getKPNLisaAuthorizationProfilesResponse
 
-        if ($getKPNLisaTeamsResponse.Value -is [array]) {
-            [void]$kpnLisaTeams.AddRange($getKPNLisaTeamsResponse.Value)
-        }
-        else {
-            [void]$kpnLisaTeams.Add($getKPNLisaTeamsResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaTeamsResponse.'nextLink'))
-
-    Write-Information "Queried teams. Result count: $(($kpnLisaTeams | Measure-Object).Count)"
-    #endregion Get Teams
-
+    Write-Information "Queried authorization profiles. Result count: $(($kpnLisaAuthorizationProfiles | Measure-Object).Count)"
+    #endregion Get AuthorizationProfiles
+    
     #region Send results to HelloID
-    $kpnLisaTeams | ForEach-Object {
+    $kpnLisaAuthorizationProfiles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "Team - $($_.displayName)"
+        $displayName = "AuthorizationProfile - $($_.displayName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(

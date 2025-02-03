@@ -119,9 +119,9 @@ try {
         ErrorAction     = "Stop"
     }
     
-    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
+    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -136,7 +136,7 @@ try {
     Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
     #region Add account to group

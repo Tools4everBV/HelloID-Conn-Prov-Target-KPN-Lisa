@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
-# List licenses as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-AuthorizationProfiles-Revoke
+# Revoke authorization profile from account
 # PowerShell V2
 #################################################
 
@@ -89,7 +89,15 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    #region Verify account reference
+    $actionMessage = "verifying account reference"
+    
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw "The account reference could not be found"
+    }
+    #endregion Verify account reference
+    
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -131,64 +139,64 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Licenses
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
-    $actionMessage = "querying licenses"
+    #region Get AuthorizationProfile Members
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/authorizationprofiles
+    $actionMessage = "querying authorization profile member object"
 
-    $kpnLisaLicenses = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaLicensesSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
+    $getKPNLisaAuthorizationProfileMembersSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/authorizationprofiles/$($actionContext.References.Permission.id)/members"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
+
+    Write-Verbose "SplatParams: $($getKPNLisaAuthorizationProfileMembersSplatParams | ConvertTo-Json)"
+
+    # Add header after printing splat
+    $getKPNLisaAuthorizationProfileMembersSplatParams['Headers'] = $headers
+
+    $getKPNLisaAuthorizationProfileMembersResponse = $null
+    $getKPNLisaAuthorizationProfileMembersResponse = Invoke-RestMethod @getKPNLisaAuthorizationProfileMembersSplatParams
+    $kpnLisaAuthorizationProfileMemberObject = $getKPNLisaAuthorizationProfileMembersResponse | Where-Object { $_.objectId -eq $($actionContext.References.Account) }
+
+    Write-Verbose "Queried authorization profile member object. Result: $($kpnLisaAuthorizationProfileMemberObject | ConvertTo-Json)"
+    #endregion Get Members of AuthorizationProfile
+
+    if ([string]::IsNullOrEmpty($kpnLisaAuthorizationProfileMemberObject)) {
+        throw "No member found where [objectId] = [$($actionContext.References.Account)]."
+    }
+    else {
+        #region Remove account from authorization profile
+        # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/AuthorizationProfiles/{identifier}/members/{memberId}
+        $actionMessage = "revoking authorization profile [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
+
+        $revokePermissionSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/authorizationprofiles/$($actionContext.References.Permission.id)/members/$($kpnLisaAuthorizationProfileMemberObject.id)"
+            Method      = "DELETE"
+            ContentType = 'application/json; charset=utf-8'
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
-            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
-        }
 
-        Write-Verbose "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($revokePermissionSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+        if (-Not($actionContext.DryRun -eq $true)) {
+            # Add header after printing splat
+            $revokePermissionSplatParams['Headers'] = $headers
 
-        $getKPNLisaLicensesResponse = $null
-        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+            $revokePermissionResponse = Invoke-RestMethod @revokePermissionSplatParams
 
-        if ($getKPNLisaLicensesResponse.Value -is [array]) {
-            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    # Action  = "" # Optional
+                    Message = "Revoked authorization profile [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                    IsError = $false
+                })
         }
         else {
-            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
+            Write-Warning "DryRun: Would revoke authorization profile [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
-
-    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
-    #endregion Get Licenses
-
-    #region Send results to HelloID
-    $kpnLisaLicenses | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "License - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id            = $_.id
-                    Name          = $_.displayName
-                    SkuId         = $_.skuId
-                    SkuPartNumber = $_.skuPartNumber
-                }
-            }
-        )
+        #endregion Remove account from authorization profile
     }
-    #endregion Send results to HelloID
 }
 catch {
     $ex = $PSItem
@@ -203,8 +211,26 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    Write-Warning $warningMessage
+    if ($auditMessage -like "*No member found*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped revoking authorization profile [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Reason: User is already no longer member of this authorization profile."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
-    Write-Error $auditMessage
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
+}
+finally {
+    # Check if auditLogs contains errors, if no errors are found, set success to true
+    if (-NOT($outputContext.AuditLogs.IsError -contains $true)) {
+        $outputContext.Success = $true
+    }
 }

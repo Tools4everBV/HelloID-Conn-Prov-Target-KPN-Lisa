@@ -1,162 +1,298 @@
-###################################################################
-# HelloID-Conn-Prov-Target-KPNLisa-Delete
+#################################################
+# HelloID-Conn-Prov-Target-KPN-Lisa-Delete
+# Delete account
 # PowerShell V2
-###################################################################
+#################################################
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-#region functions
-function Get-LisaAccessToken {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $TenantId,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $ClientId,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $ClientSecret,
-
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]
-        $Scope,
-
-        [Parameter()]
-        [switch]
-        $AsSecureString
-    )
-
-    try {
-        $SplatParams = @{
-            Uri         = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token/"
-            ContentType = "application/x-www-form-urlencoded"
-            Method      = "Post"
-            Body        = @{
-                grant_type    = "client_credentials"
-                client_id     = $ClientId
-                client_secret = $ClientSecret
-                scope         = $Scope
-            }
-        }
-        $Response = Invoke-RestMethod @SplatParams
-
-        if ($AsSecureString) {
-            Write-Output ($Response.access_token | ConvertTo-SecureString -AsPlainText)
-        }
-        else {
-            Write-Output ($Response.access_token)
-        }
-    }
-    catch {
-        $PSCmdlet.ThrowTerminatingError($PSItem)
-    }
+# Set debug logging
+switch ($actionContext.Configuration.isDebug) {
+    $true { $VerbosePreference = "Continue" }
+    $false { $VerbosePreference = "SilentlyContinue" }
 }
+$InformationPreference = "Continue"
+$WarningPreference = "Continue"
 
-
-function Resolve-ErrorMessage {
+#region functions
+function Resolve-KPNLisaError {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory)]
         [object]
         $ErrorObject
     )
-
     process {
-        $Exception = [PSCustomObject]@{
-            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
-            RequestUri            = $ErrorObject.TargetObject.RequestUri
-            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = $Null
-            VerboseErrorMessage   = $Null
+        $httpErrorObj = [PSCustomObject]@{
+            ScriptLineNumber = $ErrorObject.InvocationInfo.ScriptLineNumber
+            Line             = $ErrorObject.InvocationInfo.Line
+            ErrorDetails     = $ErrorObject.Exception.Message
+            FriendlyMessage  = $ErrorObject.Exception.Message
         }
-
-        switch ($ErrorObject.Exception.GetType().FullName) {
-            "Microsoft.PowerShell.Commands.HttpResponseException" {
-                $Exception.ErrorMessage = $ErrorObject.ErrorDetails.Message
-                break
-            }
-            "System.Net.WebException" {
-                $Exception.ErrorMessage = [System.IO.StreamReader]::new(
-                    $ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
-                break
-            }
-            default {
-                $Exception.ErrorMessage = $ErrorObject.Exception.Message
+        if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
+            $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
+        }
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            if ($null -ne $ErrorObject.Exception.Response) {
+                $streamReaderResponse = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                if (-not [string]::IsNullOrEmpty($streamReaderResponse)) {
+                    $httpErrorObj.ErrorDetails = $streamReaderResponse
+                }
             }
         }
+        try {
 
-        $Exception.VerboseErrorMessage = @(
-            "Error at Line [$($ErrorObject.InvocationInfo.ScriptLineNumber)]: $($ErrorObject.InvocationInfo.Line)."
-            "ErrorMessage: $($Exception.ErrorMessage) [$($ErrorObject.ErrorDetails.Message)]"
-        ) -Join " "
+            $errorObjectConverted = $ErrorObject.ErrorDetails.Message | ConvertFrom-Json -ErrorAction Stop
 
-        Write-Output $Exception
+            if ($null -ne $errorObjectConverted.Error) {
+                if ($null -ne $errorObjectConverted.Error.Message) {
+                    $httpErrorObj.FriendlyMessage = $errorObjectConverted.Error.Message
+
+                    if ($null -ne $errorObjectConverted.Error.Code) { 
+                        $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Error code: $($errorObjectConverted.Error.Code)"
+                    }
+
+                    if ($null -ne $errorObjectConverted.ErrorDetails) { 
+                        $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Additional details: $($errorObjectConverted.ErrorDetails | ConvertTo-Json)"
+                    }
+                }
+                else {
+                    $httpErrorObj.FriendlyMessage = $errorObjectConverted.Error
+                }
+            }
+            else {
+                $httpErrorObj.FriendlyMessage = $ErrorObject
+            }
+        }
+        catch {
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
+        }
+        Write-Output $httpErrorObj
     }
+}
+
+function Convert-StringToBoolean($obj) {
+    foreach ($property in $obj.PSObject.Properties) {
+        $value = $property.Value
+        if ($value -is [string]) {
+            try {
+                $obj.$($property.Name) = [System.Convert]::ToBoolean($value)
+            }
+            catch {
+                # Handle cases where conversion fails
+                $obj.$($property.Name) = $value
+            }
+        }
+    }
+    return $obj
 }
 #endregion functions
 
-
-# Start Script
 try {
-    # Formatting Headers and authentication for KPN Lisa Requests
-    $LisaRequest = @{
-        Authentication = "Bearer"
-        Token          = $actionContext.Configuration.AzureAD | Get-LisaAccessToken -AsSecureString
-        ContentType    = "application/json; charset=utf-8"
-        Headers        = @{
-            "Mwp-Api-Version" = "1.0"
+    #region account
+    # Define account object
+    $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
+
+    # Define properties to query
+    $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
+
+    # Remove properties of account object with null-values
+    $account.PsObject.Properties | ForEach-Object {
+        # Remove properties with null-values
+        if ($_.Value -eq $null) {
+            $account.PsObject.Properties.Remove("$($_.Name)")
         }
     }
+    # Convert the properties of account object containing "TRUE" or "FALSE" to boolean
+    $account = Convert-StringToBoolean $account
+    #endRegion account
 
-    Write-Verbose -Verbose "Removing KPN Lisa account for '$($personContext.Person.DisplayName)'"
+    #region Verify account reference
+    $actionMessage = "verifying account reference"
+    
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw "The account reference could not be found"
+    }
+    #endregion Verify account reference
+    
+    #region Create access token
+    $actionMessage = "creating access token"
+    
+    $createAccessTokenBody = @{
+        grant_type    = "client_credentials"
+        client_id     = $actionContext.Configuration.EntraIDAppId
+        client_secret = $actionContext.Configuration.EntraIDAppSecret
+        scope         = $actionContext.Configuration.KPNMWPScope
+    }
+    
+    $createAccessTokenSplatParams = @{
+        Uri             = "https://login.microsoftonline.com/$($actionContext.Configuration.EntraIDTenantID)/oauth2/v2.0/token/"
+        Headers         = $headers
+        Method          = "POST"
+        ContentType     = "application/x-www-form-urlencoded"
+        UseBasicParsing = $true
+        Body            = $createAccessTokenBody
+        Verbose         = $false
+        ErrorAction     = "Stop"
+    }
+    
+    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
+    
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    #endregion Create access token
+    
+    #region Create headers
+    $actionMessage = "creating headers"
+    
+    $headers = @{
+        "Accept"          = "application/json"
+        "Content-Type"    = "application/json;charset=utf-8"
+        "Mwp-Api-Version" = "1.0"
+    }
+    
+    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
-    $SplatParams = @{
-        Uri    = "$($actionContext.Configuration.BaseUrl)/Users/$($actionContext.References.Account)"
-        Method = "Delete"
+    # Add Authorization after printing splat
+    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
+    #endregion Create headers
+
+    #region Get account
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users/{identifier}
+    $actionMessage = "querying account with ID: $($actionContext.References.Account)"
+
+    $getKPNLisaAccountSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($actionContext.References.Account)"
+        Method      = "GET"
+        Body        = @{
+            select = "$($accountPropertiesToQuery -join ',')"
+        }
+        Verbose     = $false
+        ErrorAction = "Stop"
     }
 
-    try {
-        if (-not($actionContext.DryRun -eq $true)) {
-            [void] (Invoke-RestMethod @LisaRequest @splatParams)
+    Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+
+    # Add header after printing splat
+    $getKPNLisaAccountSplatParams['Headers'] = $headers
+
+    $getKPNLisaAccountResponse = $null
+    $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
+    $correlatedAccount = $getKPNLisaAccountResponse
+        
+    Write-Verbose "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
+    #endregion Get account
+
+    #region Calulate action
+    $actionMessage = "calculating action"
+    if (($correlatedAccount | Measure-Object).count -eq 1) {
+        $actionAccount = "Delete"
+    }
+    elseif (($correlatedAccount | Measure-Object).count -eq 0) {
+        $actionAccount = "NotFound"
+    }
+    elseif (($correlatedAccount | Measure-Object).count -gt 1) {
+        $actionAccount = "MultipleFound"
+    }
+    #endregion Calulate action
+    
+    #region Process
+    switch ($actionAccount) {
+        "Delete" {
+            #region Delete account
+            # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/users/{identifier}
+            $actionMessage = "deleting account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
+
+            $deleteAccountSplatParams = @{
+                Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($outputContext.AccountReference)"
+                Method      = "DELETE"
+                ContentType = 'application/json; charset=utf-8'
+                Verbose     = $false
+                ErrorAction = "Stop"
+            }
+
+            Write-Verbose "SplatParams: $($deleteAccountSplatParams | ConvertTo-Json)"
+
+            if (-Not($actionContext.DryRun -eq $true)) {
+                # Add header after printing splat
+                $deleteAccountSplatParams['Headers'] = $headers
+
+                $deleteAccountResponse = Invoke-RestMethod @deleteAccountSplatParams
+
+                $outputContext.AuditLogs.Add([PSCustomObject]@{
+                        # Action  = "" # Optional
+                        Message = "Deleted account with AccountReference: $($outputContext.AccountReference | ConvertTo-Json)."
+                        IsError = $false
+                    })
+            }
+            else {
+                Write-Warning "DryRun: Would delete account with AccountReference: $($outputContext.AccountReference | ConvertTo-Json)."
+            }
+            #endregion Delete account
+
+            break
         }
 
-        $outputContext.AuditLogs.Add([PSCustomObject]@{
-                Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-                Message = "Account for '$($p.DisplayName)' is deleted"
-                IsError = $False
-            })
-    }
-    catch {
-        $StatusCode = $PSItem.Exception.Response.StatusCode
-
-        if ($StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
+        "NotFound" {
+            #region No account found
+            $actionMessage = "skipping deleting account"
+        
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-                    Message = "Account for '$($p.DisplayName)' doesn't exist, mark as deleted"
-                    IsError = $False
+                    # Action  = "" # Optional
+                    Message = "Skipped deleting account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Reason: No account found with ID: $($actionContext.References.Account). Possibly indicating that it could be deleted, or not correlated."
+                    IsError = $true
                 })
+            #endregion No account found
+
+            break
         }
-        else {
-            throw $PSItem
+
+        "MultipleFound" {
+            #region Multiple accounts found
+            $actionMessage = "deleting account"
+
+            # Throw terminal error
+            throw "Multiple accounts found with ID: $($actionContext.References.Account). Please correct this to ensure the correlation results in a single unique account."
+            #endregion Multiple accounts found
+
+            break
         }
     }
-
-    $outputContext.Success = $True
+    #endregion Process
 }
 catch {
-    $Exception = $PSItem | Resolve-ErrorMessage
+    $ex = $PSItem
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorObj = Resolve-KPNLisaError -ErrorObject $ex
+        $auditMessage = "Error $($actionMessage). Error: $($errorObj.FriendlyMessage)"
+        $warningMessage = "Error at Line [$($errorObj.ScriptLineNumber)]: $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+    }
+    else {
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+    }
 
-    Write-Verbose -Verbose $Exception.VerboseErrorMessage
+    if ($auditMessage -like "*ResourceNotFound*" -and $auditMessage -like "*User with identifier $($actionContext.References.Account) not found*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped deleting account with ID: $($actionContext.References.Account). Reason: No account found with ID: $($actionContext.References.Account). Possibly indicating that it could be deleted, or not correlated."
+                IsError = $false
+            })
+    }
+    else {
+        Write-Warning $warningMessage
 
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = "DeleteAccount" # Optionally specify a different action for this audit log
-            Message = "Error deleting account [$($personContext.Person.DisplayName) ($($actionContext.References.Account))]. Error Message: $($Exception.ErrorMessage)."
-            IsError = $True
-        })
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = $auditMessage
+                IsError = $true
+            })
+    }
+}
+finally {
+    # Check if auditLogs contains errors, if no errors are found, set success to true
+    if (-NOT($outputContext.AuditLogs.IsError -contains $true)) {
+        $outputContext.Success = $true
+    }
 }

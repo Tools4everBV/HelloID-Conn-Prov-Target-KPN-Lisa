@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
-# List licenses as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-AuthorizationProfiles-List
+# List authorization profiles as permissions
 # PowerShell V2
 #################################################
 
@@ -131,59 +131,41 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Licenses
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
-    $actionMessage = "querying licenses"
+    #region Get AuthorizationProfiles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/authorizationprofiles
+    $actionMessage = "querying authorization profiles"
 
-    $kpnLisaLicenses = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaLicensesSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
-            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
-        }
+    $getKPNLisaAuthorizationProfilesSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/authorizationprofiles"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
 
-        Write-Verbose "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+    Write-Verbose "SplatParams: $($getKPNLisaAuthorizationProfilesSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+    # Add header after printing splat
+    $getKPNLisaAuthorizationProfilesSplatParams['Headers'] = $headers
 
-        $getKPNLisaLicensesResponse = $null
-        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+    $getKPNLisaAuthorizationProfilesResponse = $null
+    $getKPNLisaAuthorizationProfilesResponse = Invoke-RestMethod @getKPNLisaAuthorizationProfilesSplatParams
+    $kpnLisaAuthorizationProfiles = $getKPNLisaAuthorizationProfilesResponse
 
-        if ($getKPNLisaLicensesResponse.Value -is [array]) {
-            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
-        }
-        else {
-            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
-
-    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
-    #endregion Get Licenses
-
+    Write-Information "Queried authorization profiles. Result count: $(($kpnLisaAuthorizationProfiles | Measure-Object).Count)"
+    #endregion Get AuthorizationProfiles
+    
     #region Send results to HelloID
-    $kpnLisaLicenses | ForEach-Object {
+    $kpnLisaAuthorizationProfiles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "License - $($_.displayName)"
+        $displayName = "AuthorizationProfile - $($_.displayName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
             @{
                 displayName    = $displayName
                 identification = @{
-                    Id            = $_.id
-                    Name          = $_.displayName
-                    SkuId         = $_.skuId
-                    SkuPartNumber = $_.skuPartNumber
+                    Id   = $_.id
+                    Name = $_.displayName
                 }
             }
         )

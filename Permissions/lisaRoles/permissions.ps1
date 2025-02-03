@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
-# List licenses as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-LisaRoles-List
+# List lisa roles as permissions
 # PowerShell V2
 #################################################
 
@@ -131,14 +131,14 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Licenses
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
-    $actionMessage = "querying licenses"
+    #region Get LisaRoles
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/lisaroles
+    $actionMessage = "querying lisa roles"
 
-    $kpnLisaLicenses = [System.Collections.ArrayList]@()
+    $kpnLisaLisaRoles = [System.Collections.ArrayList]@()
     do {
-        $getKPNLisaLicensesSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
+        $getKPNLisaLisaRolesSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/lisaroles"
             Method      = "GET"
             Body        = @{
                 Top       = 999
@@ -147,43 +147,41 @@ try {
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
-            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
+        if (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink')) {
+            $getKPNLisaLisaRolesSplatParams.Body.SkipToken = $getKPNLisaLisaRolesResponse.'nextLink'
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($getKPNLisaLisaRolesSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
-        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+        $getKPNLisaLisaRolesSplatParams['Headers'] = $headers
 
-        $getKPNLisaLicensesResponse = $null
-        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+        $getKPNLisaLisaRolesResponse = $null
+        $getKPNLisaLisaRolesResponse = Invoke-RestMethod @getKPNLisaLisaRolesSplatParams
 
-        if ($getKPNLisaLicensesResponse.Value -is [array]) {
-            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
+        if ($getKPNLisaLisaRolesResponse.Value -is [array]) {
+            [void]$kpnLisaLisaRoles.AddRange($getKPNLisaLisaRolesResponse.Value)
         }
         else {
-            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
+            [void]$kpnLisaLisaRoles.Add($getKPNLisaLisaRolesResponse.Value)
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaLisaRolesResponse.'nextLink'))
 
-    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
-    #endregion Get Licenses
+    Write-Information "Queried lisa roles. Result count: $(($kpnLisaLisaRoles | Measure-Object).Count)"
+    #endregion Get LisaRoles
 
     #region Send results to HelloID
-    $kpnLisaLicenses | ForEach-Object {
+    $kpnLisaLisaRoles | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "License - $($_.displayName)"
+        $displayName = "LisaRole - $($_.roleName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
             @{
                 displayName    = $displayName
                 identification = @{
-                    Id            = $_.id
-                    Name          = $_.displayName
-                    SkuId         = $_.skuId
-                    SkuPartNumber = $_.skuPartNumber
+                    Id   = $_.id
+                    Name = $_.roleName
                 }
             }
         )

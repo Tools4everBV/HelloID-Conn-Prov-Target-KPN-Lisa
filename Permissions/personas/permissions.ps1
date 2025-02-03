@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
-# List licenses as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Personas-List
+# List personas as permissions
 # PowerShell V2
 #################################################
 
@@ -131,59 +131,41 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Licenses
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
-    $actionMessage = "querying licenses"
+    #region Get Personas
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/personas
+    $actionMessage = "querying personas"
 
-    $kpnLisaLicenses = [System.Collections.ArrayList]@()
-    do {
-        $getKPNLisaLicensesSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
-            Method      = "GET"
-            Body        = @{
-                Top       = 999
-                SkipToken = $Null
-            }
-            Verbose     = $false
-            ErrorAction = "Stop"
-        }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
-            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
-        }
+    $getKPNLisaPersonasSplatParams = @{
+        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas"
+        Method      = "GET"
+        Verbose     = $false
+        ErrorAction = "Stop"
+    }
 
-        Write-Verbose "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+    Write-Verbose "SplatParams: $($getKPNLisaPersonasSplatParams | ConvertTo-Json)"
 
-        # Add header after printing splat
-        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+    # Add header after printing splat
+    $getKPNLisaPersonasSplatParams['Headers'] = $headers
 
-        $getKPNLisaLicensesResponse = $null
-        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+    $getKPNLisaPersonasResponse = $null
+    $getKPNLisaPersonasResponse = Invoke-RestMethod @getKPNLisaPersonasSplatParams
+    $kpnLisaPersonas = $getKPNLisaPersonasResponse
 
-        if ($getKPNLisaLicensesResponse.Value -is [array]) {
-            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
-        }
-        else {
-            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
-        }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
-
-    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
-    #endregion Get Licenses
+    Write-Information "Queried personas. Result count: $(($kpnLisaPersonas | Measure-Object).Count)"
+    #endregion Get Personas
 
     #region Send results to HelloID
-    $kpnLisaLicenses | ForEach-Object {
+    $kpnLisaPersonas | ForEach-Object {
         # Shorten DisplayName to max. 100 chars
-        $displayName = "License - $($_.displayName)"
+        $displayName = "Persona - $($_.displayName)"
         $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
         
         $outputContext.Permissions.Add(
             @{
                 displayName    = $displayName
                 identification = @{
-                    Id            = $_.id
-                    Name          = $_.displayName
-                    SkuId         = $_.skuId
-                    SkuPartNumber = $_.skuPartNumber
+                    Id   = $_.id
+                    Name = $_.displayName
                 }
             }
         )

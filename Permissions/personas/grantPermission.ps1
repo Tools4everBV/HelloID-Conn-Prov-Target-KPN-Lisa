@@ -119,9 +119,9 @@ try {
         ErrorAction     = "Stop"
     }
     
-    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
+    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -136,12 +136,12 @@ try {
     Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
     #region Add account to persona
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: POST /api/Personas/{identifier}/members
-    $actionMessage = "granting persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: POST /api/users/{identifier}/personas
+    $actionMessage = "granting persona [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
     $grantPermissionSplatParams = @{
         Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas/$($actionContext.References.Permission.id)/members"
@@ -163,12 +163,12 @@ try {
 
         $outputContext.AuditLogs.Add([PSCustomObject]@{
                 # Action  = "" # Optional
-                Message = "Granted persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                Message = "Granted persona [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
                 IsError = $false
             })
     }
     else {
-        Write-Warning "DryRun: Would grant persona [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+        Write-Warning "DryRun: Would grant persona [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] to account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
     }
     #endregion Add account to persona
 }
@@ -185,10 +185,17 @@ catch {
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
 
-    if ($auditMessage -like "*MemberAlreadyHasAssignment*" -and $auditMessage -like "*already is assigned to persona '$($actionContext.References.Permission.Name)' with id '$($actionContext.References.Permission.id)'*") {
+    if ($auditMessage -like "*MemberAlreadyHasAssignment*" -and $auditMessage -like "*already is assigned to persona '$($actionContext.PermissionDisplayName)' with id '$($actionContext.References.Permission.id)'*") {
         $outputContext.AuditLogs.Add([PSCustomObject]@{
                 # Action  = "" # Optional
                 Message = "Skipped $($actionMessage). Reason: User is already assigned to this persona."
+                IsError = $false
+            })
+    }
+    elseif ($auditMessage -like "*MemberAlreadyHasAssignment*" -and $auditMessage -notlike "*already is assigned to persona '$($actionContext.PermissionDisplayName)' with id '$($actionContext.References.Permission.id)'*") {
+        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                # Action  = "" # Optional
+                Message = "Skipped $($actionMessage). Reason: User is already assigned to another persona."
                 IsError = $false
             })
     }

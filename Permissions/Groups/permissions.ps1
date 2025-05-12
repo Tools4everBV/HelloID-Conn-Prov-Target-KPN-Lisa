@@ -187,9 +187,7 @@ try {
             @{
                 displayName    = $displayName
                 identification = @{
-                    Id   = $_.id
-                    Name = $_.displayName
-                    Type = $_.groupType
+                    Id = $_.id
                 }
             }
         )

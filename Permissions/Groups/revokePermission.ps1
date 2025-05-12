@@ -119,9 +119,9 @@ try {
         ErrorAction     = "Stop"
     }
     
-    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
+    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -136,12 +136,12 @@ try {
     Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
     #region Remove account from group
     # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: DELETE /api/users/{identifier}/groups/{groupidentifier}
-    $actionMessage = "revoking group [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
+    $actionMessage = "revoking group [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
 
     $revokePermissionSplatParams = @{
         Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($actionContext.References.Account)/groups/$($actionContext.References.Permission.id)"
@@ -161,12 +161,12 @@ try {
 
         $outputContext.AuditLogs.Add([PSCustomObject]@{
                 # Action  = "" # Optional
-                Message = "Revoked group [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+                Message = "Revoked group [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
                 IsError = $false
             })
     }
     else {
-        Write-Warning "DryRun: Would revoke group [$($actionContext.References.Permission.Name)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
+        Write-Warning "DryRun: Would revoke group [$($actionContext.PermissionDisplayName)] with id [$($actionContext.References.Permission.id)] from account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)."
     }
     #endregion Remove account from group
 }

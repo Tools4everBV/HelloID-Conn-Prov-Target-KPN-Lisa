@@ -92,20 +92,24 @@ function Convert-StringToBoolean($obj) {
 try {
     #region account
     # Define account object
-    $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
+    if ($actionContext.Data -ne $null) {
+        $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
+
+        # Remove properties of account object with null-values
+        $account.PsObject.Properties | ForEach-Object {
+            # Remove properties with null-values
+            if ($_.Value -eq $null) {
+                $account.PsObject.Properties.Remove("$($_.Name)")
+            }
+        }
+        # Convert the properties of account object containing "TRUE" or "FALSE" to boolean
+        $account = Convert-StringToBoolean $account
+    }
 
     # Define properties to query
-    $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
-
-    # Remove properties of account object with null-values
-    $account.PsObject.Properties | ForEach-Object {
-        # Remove properties with null-values
-        if ($_.Value -eq $null) {
-            $account.PsObject.Properties.Remove("$($_.Name)")
-        }
-    }
-    # Convert the properties of account object containing "TRUE" or "FALSE" to boolean
-    $account = Convert-StringToBoolean $account
+    # Automatically replaced by HelloID for compatibility with release 2025.04
+    # $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
+    $accountPropertiesToQuery = @("id") + $outputContext.Data.PsObject.Properties.Name | Select-Object -Unique
     #endRegion account
 
     #region Verify account reference

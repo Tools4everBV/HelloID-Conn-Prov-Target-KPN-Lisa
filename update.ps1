@@ -305,7 +305,7 @@ try {
 
             # Set $outputContext.Data with correlated account
             $outputContext.Data = $correlatedAccount.PsObject.Copy()
-            
+
             # Create custom account object for update and set with updated properties
             $updateAccountBody = [PSCustomObject]@{}
             foreach ($accountNewProperty in $accountNewProperties) {
@@ -316,6 +316,10 @@ try {
             }
             # Convert the properties of custom account object for update containing "TRUE" or "FALSE" to boolean 
             $updateAccountBody = Convert-StringToBoolean $updateAccountBody
+
+            if ($updateAccountBody.PSObject.Properties.Name -Contains 'BusinessPhones' -And $updateAccountBody.BusinessPhones -is [string]) {
+                $updateAccountBody.BusinessPhones = @($updateAccountBody.BusinessPhones)
+            }
 
             $updateAccountSplatParams = @{
                 Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($outputContext.AccountReference)/bulk"
@@ -389,7 +393,7 @@ try {
     #endregion Process
 
     #region Manager
-    if ($actionContext.Configuration.updateManagerOnUpdate -eq $true) {      
+    if ($actionContext.Configuration.updateManagerOnUpdate -eq $true) {
         switch ($actionManager) {
             "Update" {
                 #region Set Manager
@@ -445,7 +449,7 @@ try {
                         IsError = $false
                     })
                 #endregion No changes
-    
+
                 break
             }
 

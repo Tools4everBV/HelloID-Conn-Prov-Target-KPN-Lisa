@@ -40,18 +40,15 @@
      - Create a **client secret** for your app.
    - Send the **Application (client) ID** to your KPN Modern Workplace contact, they will configure the required permissions.
 
-
 ## Remarks
 
 ### Workspace Profile
 
 - In KPN Lisa, a user can only have one WorkspaceProfile, so be careful not to add multiple profiles to a user. The revoke action will remove whatever workspaceProfile is active at the moment. This can result in unwanted behavior.
 
-
 ### Persona
 
 - A user can have only one Persona in KPN Lisa. Assigning more than one will return an error. Ensure your Business Rules assign only a single Persona per user.
-
 
 ### Manager Field in Field Mapping
 
@@ -98,6 +95,11 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a target connector that uses KPN's REST A
 | [/api/personas](https://mwpapi.kpnwerkplek.com/index.html)                                              | List personas (GET)                             |
 | [/api/Personas/{identifier}/members](https://mwpapi.kpnwerkplek.com/index.html)                         | Add persona to user (POST)                      |
 | [/api/Personas/{identifier}/members/{memberId}](https://mwpapi.kpnwerkplek.com/index.html)              | Remove persona from user (DELETE)               |
+| [/api/users/{identifier}/authentication](https://mwpapi.kpnwerkplek.com/index.html)                     | List authentication methods for user (GET)      |
+| [/api/users/{identifier}/authentication/phone](https://mwpapi.kpnwerkplek.com/index.html)               | Add phone authentication method (POST)          |
+| [/api/users/{identifier}/authentication/phone/{id}](https://mwpapi.kpnwerkplek.com/index.html)          | Remove phone authentication method (DELETE)     |
+| [/api/users/{identifier}/authentication/email](https://mwpapi.kpnwerkplek.com/index.html)               | Add email authentication method (POST)          |
+| [/api/users/{identifier}/authentication/email/{id}](https://mwpapi.kpnwerkplek.com/index.html)          | Remove email authentication method (DELETE)     |
 
 ### Actions
 
@@ -133,7 +135,6 @@ _HelloID-Conn-Prov-Target-KPN-Lisa_ is a target connector that uses KPN's REST A
 | `personas - grantPermission.ps1`               | Add a persona to a user account                                      |                                                        |
 | `personas - revokePermission.ps1`              | Remove a persona from a user account                                 |
 
-
 ## Getting Started
 
 ### Create an Application in Entra ID
@@ -168,6 +169,7 @@ For more information, see the [MWP API documentation](https://mwpapi.kpnwerkplek
 ### Provisioning PowerShell V2 connector
 
 #### Correlation Configuration
+
 The correlation configuration specifies which properties are used to match accounts in KPN Lia with users in HelloID.
 
 To properly set up the correlation:
@@ -182,11 +184,11 @@ To properly set up the correlation:
     | **Account Correlation Field** | `employeeId` |
 
 > Ensure the **Account Correlation Field** is supported by the MWP API's capabilities. Verify that your setup is supported by the [GET /api/users](https://mwpapi.kpnwerkplek.com/index.html).
-
 > [!TIP]
 > _For more information on correlation, please refer to our correlation [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems/correlation.html) pages_.
 
 #### Field mapping
+
 The field mapping can be imported by using the _fieldMapping.json_ file.
 
 ### Connection Settings
@@ -205,11 +207,13 @@ The following settings are required to connect to the KPN MWP API:
 | **Toggle debug logging**                                          | Displays debug logging when toggled. **Switch off in production**                                                                                                                                                                                                                                                                         | No        |
 
 ## Getting help
+>
 > [!TIP]
 > _For more information on how to configure a HelloID PowerShell connector, please refer to our [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems.html) pages_.
 
 > [!TIP]
->  _If you need help, feel free to ask questions on our [forum](https://forum.helloid.com)_.
+> _If you need help, feel free to ask questions on our [forum](https://forum.helloid.com)_.
 
 ## HelloID docs
-The official HelloID documentation can be found at: https://docs.helloid.com/
+
+The official HelloID documentation can be found at: <https://docs.helloid.com/>

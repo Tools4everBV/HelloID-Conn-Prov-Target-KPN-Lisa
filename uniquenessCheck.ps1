@@ -120,7 +120,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -132,7 +132,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -170,7 +170,7 @@ try {
             ErrorAction = "Stop"
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+        Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
         $getKPNLisaAccountSplatParams['Headers'] = $headers
@@ -179,18 +179,18 @@ try {
         $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
         $correlatedAccount = $getKPNLisaAccountResponse.Value
     
-        Write-Verbose "Queried account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]. Result: $($correlatedAccount | ConvertTo-Json)"
+        Write-Information "Queried account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]. Result: $($correlatedAccount | ConvertTo-Json)"
         #endregion Get account
 
         #region Check property uniqueness
         $actionMessage = "checking if property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique"
         if (($correlatedAccount | Measure-Object).count -gt 0) {
             if ($actionContext.Operation.ToLower() -ne "create" -and $correlatedAccount.id -eq $actionContext.References.Account) {
-                Write-Verbose "Person is using property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] themselves."
+                Write-Information "Person is using property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] themselves."
             }
             else {
-                Write-Verbose "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique."
-                Write-Verbose "In use by: $($correlatedAccount | ConvertTo-Json)."
+                Write-Information "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique."
+                Write-Information "In use by: $($correlatedAccount | ConvertTo-Json)."
                 [void]$outputContext.NonUniqueFields.Add($fieldToCheck.Name)
         
                 if (($fieldToCheck.Value.keepInSyncWith | Measure-Object).Count -ge 1) {
@@ -201,7 +201,7 @@ try {
             }
         }
         elseif (($correlatedAccount | Measure-Object).count -eq 0) {
-            Write-Verbose "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique."
+            Write-Information "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique."
         }
         #endregion Check property uniqueness
     }

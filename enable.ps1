@@ -134,7 +134,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -146,7 +146,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -166,7 +166,7 @@ try {
         ErrorAction = "Stop"
     }
 
-    Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+    Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
     # Add header after printing splat
     $getKPNLisaAccountSplatParams['Headers'] = $headers
@@ -175,7 +175,7 @@ try {
     $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
     $correlatedAccount = $getKPNLisaAccountResponse
         
-    Write-Verbose "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
+    Write-Information "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
     #endregion Get account
 
     #region Calulate action
@@ -228,7 +228,7 @@ try {
                 $accountChangedPropertiesObject.NewValues.$($accountNewProperty.Name) = $accountNewProperty.Value
             }
 
-            Write-Verbose "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
+            Write-Information "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
 
             $actionAccount = "Update"
         }
@@ -236,7 +236,7 @@ try {
             $actionAccount = "NoChanges"
         }            
 
-        Write-Verbose "Compared current account to mapped properties. Result: $actionAccount"
+        Write-Information "Compared current account to mapped properties. Result: $actionAccount"
     }
     elseif (($correlatedAccount | Measure-Object).count -eq 0) {
         $actionAccount = "NotFound"
@@ -276,7 +276,7 @@ try {
                 ErrorAction = "Stop"
             }
 
-            Write-Verbose "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
 
             if (-Not($actionContext.DryRun -eq $true)) {
                 # Add header after printing splat

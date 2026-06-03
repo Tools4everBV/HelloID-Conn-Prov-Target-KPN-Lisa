@@ -107,7 +107,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -119,7 +119,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -145,7 +145,7 @@ try {
             $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
+        Write-Information "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
         $getKPNLisaGroupsSplatParams['Headers'] = $headers
@@ -192,7 +192,7 @@ try {
                 $getKPNLisaGroupMembersSplatParams.Body.SkipToken = $getKPNLisaGroupMembersResponse.'nextLink'
             }
 
-            Write-Verbose "SplatParams: $($getKPNLisaGroupMembersSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($getKPNLisaGroupMembersSplatParams | ConvertTo-Json)"
 
             # Add header after printing splat
             $getKPNLisaGroupMembersSplatParams['Headers'] = $headers

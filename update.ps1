@@ -136,7 +136,7 @@ try {
 
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
 
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expiresIn | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
 
     #region Create headers
@@ -148,7 +148,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
 
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
@@ -200,7 +200,7 @@ try {
                 ErrorAction = "Stop"
             }
 
-            Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
             # Add header after printing splat
             $getKPNLisaAccountManagerSplatParams['Headers'] = $headers
@@ -209,7 +209,7 @@ try {
             $getKPNLisaAccountManagerResponse = Invoke-RestMethod @getKPNLisaAccountManagerSplatParams
             $previousManagerId = $getKPNLisaAccountManagerResponse.id
 
-            Write-Verbose "Queried manager of account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Result: $($getKPNLisaAccountManagerResponse | ConvertTo-Json)"
+            Write-Information "Queried manager of account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Result: $($getKPNLisaAccountManagerResponse | ConvertTo-Json)"
             #endregion Get manager of  account
 
             #region Calulate manager action
@@ -272,7 +272,7 @@ try {
                 $accountChangedPropertiesObject.NewValues.$($accountNewProperty.Name) = $accountNewProperty.Value
             }
 
-            Write-Verbose "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
+            Write-Information "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
 
             $actionAccount = "Update"
         }
@@ -280,7 +280,7 @@ try {
             $actionAccount = "NoChanges"
         }
 
-        Write-Verbose "Compared current account to mapped properties. Result: $actionAccount"
+        Write-Information "Compared current account to mapped properties. Result: $actionAccount"
     }
     elseif (($correlatedAccount | Measure-Object).count -eq 0) {
         $actionAccount = "NotFound"
@@ -329,7 +329,7 @@ try {
                 ErrorAction = "Stop"
             }
 
-            Write-Verbose "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
 
             if (-Not($actionContext.DryRun -eq $true)) {
                 # Add header after printing splat
@@ -408,7 +408,7 @@ try {
                     ErrorAction = "Stop"
                 }
 
-                Write-Verbose "SplatParams: $($setManagerSplatParams | ConvertTo-Json)"
+                Write-Information "SplatParams: $($setManagerSplatParams | ConvertTo-Json)"
 
                 if (-Not($actionContext.DryRun -eq $true)) {
                     # Add header after printing splat
@@ -464,7 +464,7 @@ try {
                     ErrorAction = "Stop"
                 }
 
-                Write-Verbose "SplatParams: $($clearManagerSplatParams | ConvertTo-Json)"
+                Write-Information "SplatParams: $($clearManagerSplatParams | ConvertTo-Json)"
 
                 if (-Not($actionContext.DryRun -eq $true)) {
                     # Add header after printing splat

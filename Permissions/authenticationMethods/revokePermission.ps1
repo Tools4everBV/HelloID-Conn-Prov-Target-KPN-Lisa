@@ -115,7 +115,7 @@ try {
 
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
 
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
 
     #region Create headers
@@ -127,7 +127,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
 
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
@@ -146,7 +146,7 @@ try {
     }
 
     $currentAuthenticationMethods = Invoke-RestMethod @getCurrentAuthenticationMethodsSplatParams
-    Write-Verbose "Current authentication methods: $($currentAuthenticationMethods | ConvertTo-Json -Depth 10)"
+    Write-Information "Current authentication methods: $($currentAuthenticationMethods | ConvertTo-Json -Depth 10)"
     #endregion Get current authentication methods
 
     #region Determine current value and method ID (flat array)

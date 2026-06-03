@@ -113,7 +113,7 @@ try {
     
     $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -125,7 +125,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
@@ -142,7 +142,7 @@ try {
         ErrorAction = "Stop"
     }
 
-    Write-Verbose "SplatParams: $($getKPNLisaPersonaMembersSplatParams | ConvertTo-Json)"
+    Write-Information "SplatParams: $($getKPNLisaPersonaMembersSplatParams | ConvertTo-Json)"
 
     # Add header after printing splat
     $getKPNLisaPersonaMembersSplatParams['Headers'] = $headers
@@ -151,7 +151,7 @@ try {
     $getKPNLisaPersonaMembersResponse = Invoke-RestMethod @getKPNLisaPersonaMembersSplatParams
     $kpnLisaPersonaMemberObject = $getKPNLisaPersonaMembersResponse | Where-Object { $_.objectId -eq $($actionContext.References.Account) }
 
-    Write-Verbose "Queried persona member object. Result: $($kpnLisaPersonaMemberObject | ConvertTo-Json)"
+    Write-Information "Queried persona member object. Result: $($kpnLisaPersonaMemberObject | ConvertTo-Json)"
     #endregion Get Members of Persona
 
     if ([string]::IsNullOrEmpty($kpnLisaPersonaMemberObject)) {
@@ -170,7 +170,7 @@ try {
             ErrorAction = "Stop"
         }
 
-        Write-Verbose "SplatParams: $($revokePermissionSplatParams | ConvertTo-Json)"
+        Write-Information "SplatParams: $($revokePermissionSplatParams | ConvertTo-Json)"
 
         if (-Not($actionContext.DryRun -eq $true)) {
             # Add header after printing splat

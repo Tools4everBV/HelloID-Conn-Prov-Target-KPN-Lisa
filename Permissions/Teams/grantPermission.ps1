@@ -8,14 +8,6 @@
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-# Set debug logging
-switch ($actionContext.Configuration.isDebug) {
-    $true { $VerbosePreference = "Continue" }
-    $false { $VerbosePreference = "SilentlyContinue" }
-}
-$InformationPreference = "Continue"
-$WarningPreference = "Continue"
-
 #region functions
 function Resolve-KPNLisaError {
     [CmdletBinding()]
@@ -122,7 +114,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -134,7 +126,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -158,7 +150,7 @@ try {
         ErrorAction = "Stop"
     }
 
-    Write-Verbose "SplatParams: $($grantPermissionSplatParams | ConvertTo-Json)"
+    Write-Information "SplatParams: $($grantPermissionSplatParams | ConvertTo-Json)"
 
     if (-Not($actionContext.DryRun -eq $true)) {
         # Add header after printing splat

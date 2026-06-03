@@ -3,17 +3,9 @@
 # Update account and optionally set manager
 # PowerShell V2
 #################################################
-
+$actionContext.DryRun = $false
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
-
-# Set debug logging
-switch ($actionContext.Configuration.isDebug) {
-    $true { $VerbosePreference = "Continue" }
-    $false { $VerbosePreference = "SilentlyContinue" }
-}
-$InformationPreference = "Continue"
-$WarningPreference = "Continue"
 
 #region functions
 function Resolve-KPNLisaError {
@@ -49,11 +41,11 @@ function Resolve-KPNLisaError {
                 if ($null -ne $errorObjectConverted.Error.Message) {
                     $httpErrorObj.FriendlyMessage = $errorObjectConverted.Error.Message
 
-                    if ($null -ne $errorObjectConverted.Error.Code) { 
+                    if ($null -ne $errorObjectConverted.Error.Code) {
                         $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Error code: $($errorObjectConverted.Error.Code)"
                     }
 
-                    if ($null -ne $errorObjectConverted.ErrorDetails) { 
+                    if ($null -ne $errorObjectConverted.ErrorDetails) {
                         $httpErrorObj.FriendlyMessage = $httpErrorObj.FriendlyMessage + ". Additional details: $($errorObjectConverted.ErrorDetails | ConvertTo-Json)"
                     }
                 }
@@ -95,7 +87,9 @@ try {
     $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
 
     # Define properties to query
-    $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
+    # Automatically replaced by HelloID for compatibility with release 2025.04
+    # $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
+    $accountPropertiesToQuery = @("id") + $outputContext.Data.PsObject.Properties.Name | Select-Object -Unique
 
     # Remove properties of account object with null-values
     $account.PsObject.Properties | ForEach-Object {
@@ -113,22 +107,22 @@ try {
 
     #region Verify account reference
     $actionMessage = "verifying account reference"
-    
+
     if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
         throw "The account reference could not be found"
     }
     #endregion Verify account reference
-    
+
     #region Create access token
     $actionMessage = "creating access token"
-    
+
     $createAccessTokenBody = @{
         grant_type    = "client_credentials"
         client_id     = $actionContext.Configuration.EntraIDAppId
         client_secret = $actionContext.Configuration.EntraIDAppSecret
         scope         = $actionContext.Configuration.KPNMWPScope
     }
-    
+
     $createAccessTokenSplatParams = @{
         Uri             = "https://login.microsoftonline.com/$($actionContext.Configuration.EntraIDTenantID)/oauth2/v2.0/token/"
         Headers         = $headers
@@ -139,25 +133,25 @@ try {
         Verbose         = $false
         ErrorAction     = "Stop"
     }
-    
-    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
-    
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
+
+    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
+
+    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
-    
+
     #region Create headers
     $actionMessage = "creating headers"
-    
+
     $headers = @{
         "Accept"          = "application/json"
         "Content-Type"    = "application/json;charset=utf-8"
         "Mwp-Api-Version" = "1.0"
     }
-    
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
     #endregion Create headers
 
     #region Get account
@@ -174,7 +168,7 @@ try {
         ErrorAction = "Stop"
     }
 
-    Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+    Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
     # Add header after printing splat
     $getKPNLisaAccountSplatParams['Headers'] = $headers
@@ -182,8 +176,8 @@ try {
     $getKPNLisaAccountResponse = $null
     $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
     $correlatedAccount = $getKPNLisaAccountResponse
-        
-    Write-Verbose "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
+
+    Write-Information "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
     #endregion Get account
 
     #region Calulate action
@@ -198,26 +192,26 @@ try {
             #region Get manager of account
             # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users/{identifier}/manager
             $actionMessage = "querying manager of account with AccountReference: $($actionContext.References.Account | ConvertTo-Json)"
-    
+
             $getKPNLisaAccountManagerSplatParams = @{
                 Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($actionContext.References.Account)/manager"
                 Method      = "GET"
                 Verbose     = $false
                 ErrorAction = "Stop"
             }
-    
-            Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
-    
+
+            Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+
             # Add header after printing splat
             $getKPNLisaAccountManagerSplatParams['Headers'] = $headers
-    
+
             $getKPNLisaAccountManagerResponse = $null
             $getKPNLisaAccountManagerResponse = Invoke-RestMethod @getKPNLisaAccountManagerSplatParams
             $previousManagerId = $getKPNLisaAccountManagerResponse.id
-            
-            Write-Verbose "Queried manager of account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Result: $($getKPNLisaAccountManagerResponse | ConvertTo-Json)"
+
+            Write-Information "Queried manager of account with AccountReference: $($actionContext.References.Account | ConvertTo-Json). Result: $($getKPNLisaAccountManagerResponse | ConvertTo-Json)"
             #endregion Get manager of  account
-    
+
             #region Calulate manager action
             if ($actionContext.References.ManagerAccount -ne $previousManagerId) {
                 if (-not[String]::IsNullOrEmpty(($actionContext.References.ManagerAccount))) {
@@ -278,15 +272,15 @@ try {
                 $accountChangedPropertiesObject.NewValues.$($accountNewProperty.Name) = $accountNewProperty.Value
             }
 
-            Write-Verbose "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
+            Write-Information "Changed properties: $($accountChangedPropertiesObject | ConvertTo-Json)"
 
             $actionAccount = "Update"
         }
         else {
             $actionAccount = "NoChanges"
-        }            
+        }
 
-        Write-Verbose "Compared current account to mapped properties. Result: $actionAccount"
+        Write-Information "Compared current account to mapped properties. Result: $actionAccount"
     }
     elseif (($correlatedAccount | Measure-Object).count -eq 0) {
         $actionAccount = "NotFound"
@@ -294,8 +288,9 @@ try {
     elseif (($correlatedAccount | Measure-Object).count -gt 1) {
         $actionAccount = "MultipleFound"
     }
+    Write-Information "Action: $actionAccount"
     #endregion Calulate action
-    
+
     #region Process
     switch ($actionAccount) {
         "Update" {
@@ -305,7 +300,7 @@ try {
 
             # Set $outputContext.Data with correlated account
             $outputContext.Data = $correlatedAccount.PsObject.Copy()
-            
+
             # Create custom account object for update and set with updated properties
             $updateAccountBody = [PSCustomObject]@{}
             foreach ($accountNewProperty in $accountNewProperties) {
@@ -314,8 +309,16 @@ try {
                 # Update $outputContext.Data with updated fields
                 $outputContext.Data | Add-Member -MemberType NoteProperty -Name $accountNewProperty.Name -Value $accountNewProperty.Value -Force
             }
-            # Convert the properties of custom account object for update containing "TRUE" or "FALSE" to boolean 
+            # Convert the properties of custom account object for update containing "TRUE" or "FALSE" to boolean
             $updateAccountBody = Convert-StringToBoolean $updateAccountBody
+
+            if ($updateAccountBody.PSObject.Properties.Name -Contains 'BusinessPhones' -And $updateAccountBody.BusinessPhones -is [string]) {
+                if ([string]::IsNullOrEmpty($updateAccountBody.BusinessPhones)) {
+                    $updateAccountBody.BusinessPhones = @()
+                } else {
+                    $updateAccountBody.BusinessPhones = @($updateAccountBody.BusinessPhones)
+                }
+            }
 
             $updateAccountSplatParams = @{
                 Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users/$($outputContext.AccountReference)/bulk"
@@ -326,7 +329,7 @@ try {
                 ErrorAction = "Stop"
             }
 
-            Write-Verbose "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($updateAccountSplatParams | ConvertTo-Json)"
 
             if (-Not($actionContext.DryRun -eq $true)) {
                 # Add header after printing splat
@@ -389,7 +392,7 @@ try {
     #endregion Process
 
     #region Manager
-    if ($actionContext.Configuration.updateManagerOnUpdate -eq $true) {      
+    if ($actionContext.Configuration.updateManagerOnUpdate -eq $true) {
         switch ($actionManager) {
             "Update" {
                 #region Set Manager
@@ -405,7 +408,7 @@ try {
                     ErrorAction = "Stop"
                 }
 
-                Write-Verbose "SplatParams: $($setManagerSplatParams | ConvertTo-Json)"
+                Write-Information "SplatParams: $($setManagerSplatParams | ConvertTo-Json)"
 
                 if (-Not($actionContext.DryRun -eq $true)) {
                     # Add header after printing splat
@@ -413,7 +416,7 @@ try {
 
                     $setManagerResponse = Invoke-RestMethod @setManagerSplatParams
 
-                    #region Set ManagerId 
+                    #region Set ManagerId
                     $outputContext.Data | Add-Member -MemberType NoteProperty -Name "managerId" -Value $actionContext.References.ManagerAccount -Force
                     #endregion Set ManagerId
 
@@ -445,7 +448,7 @@ try {
                         IsError = $false
                     })
                 #endregion No changes
-    
+
                 break
             }
 
@@ -461,7 +464,7 @@ try {
                     ErrorAction = "Stop"
                 }
 
-                Write-Verbose "SplatParams: $($clearManagerSplatParams | ConvertTo-Json)"
+                Write-Information "SplatParams: $($clearManagerSplatParams | ConvertTo-Json)"
 
                 if (-Not($actionContext.DryRun -eq $true)) {
                     # Add header after printing splat

@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Personas-List
-# List personas as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Personas-Import
+# Correlate to permission
 # PowerShell V2
 #################################################
 
@@ -81,7 +81,9 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    Write-Information 'Starting target permission import for [KPN Lisa Personas]'
+
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -103,9 +105,9 @@ try {
         ErrorAction     = "Stop"
     }
     
-    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
+    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -120,7 +122,7 @@ try {
     Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
     #region Get Personas
@@ -146,22 +148,79 @@ try {
     Write-Information "Queried personas. Result count: $(($kpnLisaPersonas | Measure-Object).Count)"
     #endregion Get Personas
 
-    #region Send results to HelloID
-    $kpnLisaPersonas | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "Persona - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id = $_.id
-                }
+    #region Get Personamembers
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/personas/{identifier}/members
+    $actionMessage = "querying Kpn Lisa Persona Members"
+    foreach ($kpnLisaPersona in $kpnLisaPersonas) {  
+        $kpnLisaPersonaMembers = [System.Collections.ArrayList]@()
+
+        $getKPNLisaPersonaMembersSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas/$($kpnLisaPersona.id)/members"
+            Method      = "GET"
+            Verbose     = $false
+            ErrorAction = "Stop"
+        }
+
+        Write-Information "SplatParams: $($getKPNLisaPersonaMembersSplatParams | ConvertTo-Json)"
+
+        # Add header after printing splat
+        $getKPNLisaPersonaMembersSplatParams['Headers'] = $headers
+
+        $getKPNLisaPersonaMembersResponse = $null
+        $getKPNLisaPersonaMembersResponse = Invoke-RestMethod @getKPNLisaPersonaMembersSplatParams
+
+        if ($getKPNLisaPersonaMembersResponse -is [array]) {
+            [void]$kpnLisaPersonaMembers.AddRange($getKPNLisaPersonaMembersResponse)
+        }
+        else {
+            [void]$kpnLisaPersonaMembers.Add($getKPNLisaPersonaMembersResponse)
+        }
+        $numberOfAccounts = $(($kpnLisaPersonaMembers | Measure-Object).Count)
+
+        # Make sure the displayname has a value of max 100 char
+        if (-not([string]::IsNullOrEmpty($kpnLisaPersona.displayName))) {
+            $displayname = $($kpnLisaPersona.displayName).substring(0, [System.Math]::Min(100, $($kpnLisaPersona.displayName).Length))
+        }
+        else {
+            $displayname = $kpnLisaPersona.id
+        }
+        # Make sure the description has a value of max 100 char
+        if (-not([string]::IsNullOrEmpty($kpnLisaPersona.description))) {
+            $description = $($kpnLisaPersona.description).substring(0, [System.Math]::Min(100, $($kpnLisaPersona.description).Length))
+        }
+        else {
+            $description = $null
+        }
+
+        $permission = @{
+            PermissionReference = @{
+                Id = $kpnLisaPersona.id
+            }       
+            Description         = $description
+            DisplayName         = $displayName
+        }
+
+        # Batch permissions based on the amount of account references, 
+        # to make sure the output objects are not above the limit
+        $accountsBatchSize = 500
+        if ($numberOfAccounts -gt 0) {
+            $accountsBatchSize = 500
+            $batches = 0..($numberOfAccounts - 1) | Group-Object { [math]::Floor($_ / $accountsBatchSize ) }
+            foreach ($batch in $batches) {
+                $permission.AccountReferences = [array]($batch.Group | ForEach-Object {
+                    if($kpnLisaPersonaMembers[$_].objectId -eq '614d643b-d5ca-409c-9e12-954bb17eea6e'){
+                        @($kpnLisaPersonaMembers[$_])
+                    }
+                    if($kpnLisaPersonaMembers[$_].objectId -eq '06032afa-e378-4def-9c56-4e4276707399'){
+                        @($kpnLisaPersonaMembers[$_])
+                    }
+                    @($kpnLisaPersonaMembers[$_].objectId)
+                 })
+                Write-Output $permission
             }
-        )
+        }
     }
-    #endregion Send results to HelloID
+    Write-Information 'Target permission import for [KPN Lisa Personas] completed'
 }
 catch {
     $ex = $PSItem
@@ -178,6 +237,6 @@ catch {
 
     Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
+    # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
 }

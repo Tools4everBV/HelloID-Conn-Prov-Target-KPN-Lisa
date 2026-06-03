@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Licenses-List
-# List licenses as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Groups-Import
+# Correlate to permission
 # PowerShell V2
 #################################################
 
@@ -81,7 +81,9 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    Write-Information 'Starting target permission import for [KPN Lisa Groups]'
+
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -105,7 +107,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -123,14 +125,14 @@ try {
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Licenses
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/licenses
-    $actionMessage = "querying licenses"
+    #region Get Groups
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups
+    $actionMessage = "querying groups"
 
-    $kpnLisaLicenses = [System.Collections.ArrayList]@()
+    $kpnLisaGroups = [System.Collections.ArrayList]@()
     do {
-        $getKPNLisaLicensesSplatParams = @{
-            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/licenses"
+        $getKPNLisaGroupsSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups"
             Method      = "GET"
             Body        = @{
                 Top       = 999
@@ -139,48 +141,111 @@ try {
             Verbose     = $false
             ErrorAction = "Stop"
         }
-        if (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink')) {
-            $getKPNLisaLicensesSplatParams.Body.SkipToken = $getKPNLisaLicensesResponse.'nextLink'
+        if (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink')) {
+            $getKPNLisaGroupsSplatParams.Body.SkipToken = $getKPNLisaGroupsResponse.'nextLink'
         }
 
-        Write-Information "SplatParams: $($getKPNLisaLicensesSplatParams | ConvertTo-Json)"
+        Write-Information "SplatParams: $($getKPNLisaGroupsSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
-        $getKPNLisaLicensesSplatParams['Headers'] = $headers
+        $getKPNLisaGroupsSplatParams['Headers'] = $headers
 
-        $getKPNLisaLicensesResponse = $null
-        $getKPNLisaLicensesResponse = Invoke-RestMethod @getKPNLisaLicensesSplatParams
+        $getKPNLisaGroupsResponse = $null
+        $getKPNLisaGroupsResponse = Invoke-RestMethod @getKPNLisaGroupsSplatParams
 
-        if ($getKPNLisaLicensesResponse.Value -is [array]) {
-            [void]$kpnLisaLicenses.AddRange($getKPNLisaLicensesResponse.Value)
+        if ($getKPNLisaGroupsResponse.Value -is [array]) {
+            [void]$kpnLisaGroups.AddRange($getKPNLisaGroupsResponse.Value)
         }
         else {
-            [void]$kpnLisaLicenses.Add($getKPNLisaLicensesResponse.Value)
+            [void]$kpnLisaGroups.Add($getKPNLisaGroupsResponse.Value)
         }
-    } while (-not[string]::IsNullOrEmpty($getKPNLisaLicensesResponse.'nextLink'))
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupsResponse.'nextLink'))
 
-    Write-Information "Queried licenses. Result count: $(($kpnLisaLicenses | Measure-Object).Count)"
-    #endregion Get Licenses
+    # Filter out onPremisesSyncEnabled groups as they can only be managed onPremises
+    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.onPremisesSyncEnabled -ne $true }
+    
+    # Filter out grouptypes that cannot be managed from Lisa
+    $unSupportedGroupTypes = @("SoftwareUpdatePolicy", "MWP_DeviceDeploymentProfile", "MWP_UserWorkspaceProfile")
+    $kpnLisaGroups = $kpnLisaGroups | Where-Object { $_.groupType -notin $unSupportedGroupTypes }
 
-    #region Send results to HelloID
-    $kpnLisaLicenses | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "License - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id            = $_.id
-                    Name          = $_.displayName
-                    SkuId         = $_.skuId
-                    SkuPartNumber = $_.skuPartNumber
+    Write-Information "Queried groups. Result count: $(($kpnLisaGroups | Measure-Object).Count)"
+    #endregion Get Groups
+
+    #region Get Groupmembers
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/groups/{identifier}/members
+    $actionMessage = "querying Kpn Lisa Group Members"
+    foreach ($kpnLisaGroup in $kpnLisaGroups) {
+        $kpnLisaGroupMembers = [System.Collections.ArrayList]@()
+
+        do {
+            $getKPNLisaGroupMembersSplatParams = @{
+                Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/groups/$($kpnLisaGroup.id)/members"
+                Method      = "GET"
+                Body        = @{
+                    Top       = 999
+                    SkipToken = $Null
                 }
+                Verbose     = $false
+                ErrorAction = "Stop"
             }
-        )
+            if (-not[string]::IsNullOrEmpty($getKPNLisaGroupMembersResponse.'nextLink')) {
+                $getKPNLisaGroupMembersSplatParams.Body.SkipToken = $getKPNLisaGroupMembersResponse.'nextLink'
+            }
+
+            Write-Information "SplatParams: $($getKPNLisaGroupMembersSplatParams | ConvertTo-Json)"
+
+            # Add header after printing splat
+            $getKPNLisaGroupMembersSplatParams['Headers'] = $headers
+
+            $getKPNLisaGroupMembersResponse = $null
+            $getKPNLisaGroupMembersResponse = Invoke-RestMethod @getKPNLisaGroupMembersSplatParams
+            $getKPNLisaGroupMembersResponseValue = $getKPNLisaGroupMembersResponse.Value | Where-Object { $_.'memberType' -eq "User" }
+
+            if ($getKPNLisaGroupMembersResponseValue -is [array]) {
+                [void]$kpnLisaGroupMembers.AddRange($getKPNLisaGroupMembersResponseValue)
+            }
+            else {
+                [void]$kpnLisaGroupMembers.Add($getKPNLisaGroupMembersResponseValue)
+            }
+        } while (-not[string]::IsNullOrEmpty($getKPNLisaGroupMembersResponse.'nextLink'))
+        $numberOfAccounts = $(($kpnLisaGroupMembers | Measure-Object).Count)
+
+        # Make sure the displayname has a value of max 100 char
+        if (-not([string]::IsNullOrEmpty($kpnLisaGroup.displayName))) {
+            $displayname = $($kpnLisaGroup.displayName).substring(0, [System.Math]::Min(100, $($kpnLisaGroup.displayName).Length))
+        }
+        else {
+            $displayname = $kpnLisaGroup.id
+        }
+        # Make sure the description has a value of max 100 char
+        if (-not([string]::IsNullOrEmpty($kpnLisaGroup.description))) {
+            $description = $($kpnLisaGroup.description).substring(0, [System.Math]::Min(100, $($kpnLisaGroup.description).Length))
+        }
+        else {
+            $description = $null
+        }
+
+        $permission = @{
+            PermissionReference = @{
+                Id = $kpnLisaGroup.id
+            }       
+            Description         = $description
+            DisplayName         = $displayName
+        }
+
+        # Batch permissions based on the amount of account references, 
+        # to make sure the output objects are not above the limit
+        $accountsBatchSize = 500
+        if ($numberOfAccounts -gt 0) {
+            $accountsBatchSize = 500
+            $batches = 0..($numberOfAccounts - 1) | Group-Object { [math]::Floor($_ / $accountsBatchSize ) }
+            foreach ($batch in $batches) {
+                $permission.AccountReferences = [array]($batch.Group | ForEach-Object { @($kpnLisaGroupMembers[$_].id) })
+                Write-Output $permission
+            }
+        }
     }
-    #endregion Send results to HelloID
+    Write-Information 'Target permission import for [KPN Lisa Groups] completed'
 }
 catch {
     $ex = $PSItem
@@ -197,6 +262,6 @@ catch {
 
     Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
+    # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
 }

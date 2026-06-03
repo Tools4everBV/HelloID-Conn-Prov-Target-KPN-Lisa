@@ -7,14 +7,6 @@
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-# Set debug logging
-switch ($actionContext.Configuration.isDebug) {
-    $true { $VerbosePreference = "Continue" }
-    $false { $VerbosePreference = "SilentlyContinue" }
-}
-$InformationPreference = "Continue"
-$WarningPreference = "Continue"
-
 #region functions
 function Resolve-KPNLisaError {
     [CmdletBinding()]
@@ -92,20 +84,24 @@ function Convert-StringToBoolean($obj) {
 try {
     #region account
     # Define account object
-    $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
+    if ($actionContext.Data -ne $null) {
+        $account = [PSCustomObject]$actionContext.Data.PsObject.Copy()
+
+        # Remove properties of account object with null-values
+        $account.PsObject.Properties | ForEach-Object {
+            # Remove properties with null-values
+            if ($_.Value -eq $null) {
+                $account.PsObject.Properties.Remove("$($_.Name)")
+            }
+        }
+        # Convert the properties of account object containing "TRUE" or "FALSE" to boolean
+        $account = Convert-StringToBoolean $account
+    }
 
     # Define properties to query
-    $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
-
-    # Remove properties of account object with null-values
-    $account.PsObject.Properties | ForEach-Object {
-        # Remove properties with null-values
-        if ($_.Value -eq $null) {
-            $account.PsObject.Properties.Remove("$($_.Name)")
-        }
-    }
-    # Convert the properties of account object containing "TRUE" or "FALSE" to boolean
-    $account = Convert-StringToBoolean $account
+    # Automatically replaced by HelloID for compatibility with release 2025.04
+    # $accountPropertiesToQuery = @("id") + $account.PsObject.Properties.Name | Select-Object -Unique
+    $accountPropertiesToQuery = @("id") + $outputContext.Data.PsObject.Properties.Name | Select-Object -Unique
     #endRegion account
 
     #region Verify account reference
@@ -139,7 +135,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expires_in | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -151,7 +147,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -171,7 +167,7 @@ try {
         ErrorAction = "Stop"
     }
 
-    Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+    Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
     # Add header after printing splat
     $getKPNLisaAccountSplatParams['Headers'] = $headers
@@ -180,7 +176,7 @@ try {
     $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
     $correlatedAccount = $getKPNLisaAccountResponse
         
-    Write-Verbose "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
+    Write-Information "Queried account with ID: $($actionContext.References.Account). Result: $($correlatedAccount | ConvertTo-Json)"
     #endregion Get account
 
     #region Calulate action
@@ -211,7 +207,7 @@ try {
                 ErrorAction = "Stop"
             }
 
-            Write-Verbose "SplatParams: $($deleteAccountSplatParams | ConvertTo-Json)"
+            Write-Information "SplatParams: $($deleteAccountSplatParams | ConvertTo-Json)"
 
             if (-Not($actionContext.DryRun -eq $true)) {
                 # Add header after printing splat

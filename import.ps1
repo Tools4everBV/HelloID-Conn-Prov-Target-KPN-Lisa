@@ -1,6 +1,6 @@
 #################################################
-# HelloID-Conn-Prov-Target-KPN-Lisa-Permissions-Personas-List
-# List personas as permissions
+# HelloID-Conn-Prov-Target-KPN-Lisa-Import
+# Correlate to account
 # PowerShell V2
 #################################################
 
@@ -81,7 +81,23 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-try {  
+try {
+    Write-Information 'Starting target account import'
+
+    # Define properties to query
+    $importFields = $($actionContext.ImportFields)
+    $importFields = $importFields -replace '\..*', ''
+
+    # Add mandatory fields for HelloID to query and return
+    if ('id' -notin $importFields) { $importFields += 'id' }
+    if ('accountEnabled' -notin $importFields) { $importFields += 'accountEnabled ' }
+    if ('displayName' -notin $importFields) { $importFields += 'displayName' }
+    if ('userPrincipalName' -notin $importFields) { $importFields += 'userPrincipalName' }
+
+    # Convert to a ',' string
+    $fields = $importFields -join ','
+    Write-Information "Querying fields [$fields]"
+
     #region Create access token
     $actionMessage = "creating access token"
     
@@ -103,9 +119,9 @@ try {
         ErrorAction     = "Stop"
     }
     
-    $createAccessTokenResonse = Invoke-RestMethod @createAccessTokenSplatParams
+    $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Information "Created access token. Expires in: $($createAccessTokenResonse.expires_in | ConvertTo-Json)"
+    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -120,48 +136,68 @@ try {
     Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResonse.access_token)"
+    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
     #endregion Create headers
 
-    #region Get Personas
-    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/personas
-    $actionMessage = "querying personas"
+    #region Get account
+    # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users
+    $actionMessage = "querying accounts"
 
-    $getKPNLisaPersonasSplatParams = @{
-        Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/personas"
-        Method      = "GET"
-        Verbose     = $false
-        ErrorAction = "Stop"
-    }
-
-    Write-Information "SplatParams: $($getKPNLisaPersonasSplatParams | ConvertTo-Json)"
-
-    # Add header after printing splat
-    $getKPNLisaPersonasSplatParams['Headers'] = $headers
-
-    $getKPNLisaPersonasResponse = $null
-    $getKPNLisaPersonasResponse = Invoke-RestMethod @getKPNLisaPersonasSplatParams
-    $kpnLisaPersonas = $getKPNLisaPersonasResponse
-
-    Write-Information "Queried personas. Result count: $(($kpnLisaPersonas | Measure-Object).Count)"
-    #endregion Get Personas
-
-    #region Send results to HelloID
-    $kpnLisaPersonas | ForEach-Object {
-        # Shorten DisplayName to max. 100 chars
-        $displayName = "Persona - $($_.displayName)"
-        $displayName = $displayName.substring(0, [System.Math]::Min(100, $displayName.Length)) 
-        
-        $outputContext.Permissions.Add(
-            @{
-                displayName    = $displayName
-                identification = @{
-                    Id = $_.id
-                }
+    $existingAccounts = [System.Collections.ArrayList]@()
+    do {
+        $getKPNLisaUsersSplatParams = @{
+            Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users"
+            Method      = "GET"
+            Body        = @{
+                Top       = 999
+                SkipToken = $Null
             }
-        )
+            Verbose     = $false
+            ErrorAction = "Stop"
+        }
+        if (-not[string]::IsNullOrEmpty($getKPNLisaUsersResponse.'nextLink')) {
+            $getKPNLisaUsersSplatParams.Body.SkipToken = $getKPNLisaUsersResponse.'nextLink'
+        }
+
+        Write-Information "SplatParams: $($getKPNLisaUsersSplatParams | ConvertTo-Json)"
+
+        # Add header after printing splat
+        $getKPNLisaUsersSplatParams['Headers'] = $headers
+
+        $getKPNLisaUsersResponse = $null
+        $getKPNLisaUsersResponse = Invoke-RestMethod @getKPNLisaUsersSplatParams
+
+        if ($getKPNLisaUsersResponse.Value -is [array]) {
+            [void]$existingAccounts.AddRange($getKPNLisaUsersResponse.Value)
+        }
+        else {
+            [void]$existingAccounts.Add($getKPNLisaUsersResponse.Value)
+        }
+    } while (-not[string]::IsNullOrEmpty($getKPNLisaUsersResponse.'nextLink'))
+
+    Write-Information "Queried users. Result count: $(($existingAccounts | Measure-Object).Count)"
+
+    # Map the imported data to the account field mappings
+    foreach ($account in $existingAccounts) {
+        # Make sure the DisplayName has a value
+        if ([string]::IsNullOrEmpty($account.displayName)) {
+            $account.displayName = $account.id
+        }
+        # Make sure the Username has a value
+        if ([string]::IsNullOrEmpty($account.userPrincipalName)) {
+            $account.userPrincipalName = $account.id
+        }
+        # Return the result
+        Write-Output @{
+            AccountReference = $account.id
+            DisplayName      = $account.displayName
+            UserName         = $account.userPrincipalName
+            Enabled          = $account.accountEnabled
+            Data             = $account
+        }
     }
-    #endregion Send results to HelloID
+
+    Write-Information 'Target account import completed'
 }
 catch {
     $ex = $PSItem
@@ -178,6 +214,6 @@ catch {
 
     Write-Warning $warningMessage
 
-    # Required to write an error as the listing of permissions doesn't show auditlog
+    # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
 }

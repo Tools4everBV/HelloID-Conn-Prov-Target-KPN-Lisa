@@ -43,10 +43,10 @@ The following features are available:
 | Feature                                   | Supported | Actions                                 | Remarks                      |
 | ----------------------------------------- | --------- | --------------------------------------- | ---------------------------- |
 | **Account Lifecycle**                     | ✅         | Create, Update, Enable, Disable, Delete |                              |
-| **Permissions**                           | ✅         | Retrieve, Grant, Revoke                 | Only `Groups` and `Personas` |
+| **Permissions**                           | ✅         | Retrieve, Grant, Revoke                 |                              |
 | **Resources**                             | ❌         | -                                       |                              |
 | **Entitlement Import: Accounts**          | ✅         | -                                       |                              |
-| **Entitlement Import: Permissions**       | ✅         | -                                       |                              |
+| **Entitlement Import: Permissions**       | ✅         | -                                       | Only `Groups` and `Personas` |
 | **Governance Reconciliation Resolutions** | ✅         | -                                       |                              |
 
 ## Getting started

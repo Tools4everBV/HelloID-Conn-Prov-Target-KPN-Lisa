@@ -114,7 +114,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -142,7 +142,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": true,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -170,7 +170,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -198,7 +198,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": true,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -226,7 +226,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -262,7 +262,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -290,7 +290,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": true,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -363,7 +363,7 @@
                     "MappingMode": "None",
                     "Value": "\"\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -391,7 +391,7 @@
                     "MappingMode": "None",
                     "Value": "null",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -407,7 +407,7 @@
                     "MappingMode": "Complex",
                     "Value": "\"// Mapping logic to generate the BusinessPhones as a string collection.\\r\\nfunction generateBusinessPhones() {\\r\\n    const businessMobile = Person.Contact.Business.Phone.Mobile;\\r\\n\\r\\n    let businessPhones = [];\\r\\n\\r\\n    if (businessMobile) {\\r\\n        businessPhones.push(businessMobile);\\r\\n    }\\r\\n\\r\\n    return businessPhones;\\r\\n}\\r\\n\\r\\ngenerateBusinessPhones();\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -423,7 +423,7 @@
                     "MappingMode": "None",
                     "Value": "\"\"",
                     "UsedInNotifications": true,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         },
@@ -451,7 +451,7 @@
                     "MappingMode": "None",
                     "Value": "\"\"",
                     "UsedInNotifications": false,
-                    "StoreInAccountData": true
+                    "StoreInAccountData": false
                 }
             ]
         }

@@ -4,6 +4,21 @@
 # PowerShell V2
 #################################################
 
+$fieldsToCheck = [PSCustomObject]@{
+    'userPrincipalName' = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
+        systemFieldName = 'userPrincipalName' # Name of the field in KPN Lisa itself, to be used in the query to the system.
+        accountValue    = $actionContext.Data.userPrincipalName
+        keepInSyncWith  = @('mail') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
+        crossCheckOn    = @('mail', 'proxyAddresses') # Properties to cross-check for uniqueness.
+    }
+    'mail'              = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
+        systemFieldName = 'mail' # Name of the field in KPN Lisa itself, to be used in the query to the system.
+        accountValue    = $actionContext.Data.mail
+        keepInSyncWith  = @('userPrincipalName') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
+        crossCheckOn    = @('userPrincipalName', 'proxyAddresses') # Properties to cross-check for uniqueness.
+    }
+}
+
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
@@ -81,25 +96,7 @@ function Convert-StringToBoolean($obj) {
 }
 #endregion functions
 
-#region Fields to check
-$fieldsToCheck = [PSCustomObject]@{
-    'userPrincipalName' = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
-        systemFieldName = 'userPrincipalName' # Name of the field in KPN Lisa itself, to be used in the query to the system.
-        accountValue    = $actionContext.Data.userPrincipalName
-        keepInSyncWith  = @('mail') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
-        crossCheckOn    = @('mail', 'proxyAddresses') # Properties to cross-check for uniqueness.
-    }
-    'mail'              = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
-        systemFieldName = 'mail' # Name of the field in KPN Lisa itself, to be used in the query to the system.
-        accountValue    = $actionContext.Data.mail
-        keepInSyncWith  = @('userPrincipalName') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
-        crossCheckOn    = @('userPrincipalName', 'proxyAddresses') # Properties to cross-check for uniqueness.
-    }
-}
-#endregion Fields to check
-
 try {
-    #region Create access token
     $actionMessage = "creating access token"
     
     $createAccessTokenBody = @{
@@ -122,35 +119,24 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
-    #endregion Create access token
-    
-    #region Create headers
     $actionMessage = "creating headers"
     
     $headers = @{
         "Accept"          = "application/json"
         "Content-Type"    = "application/json;charset=utf-8"
         "Mwp-Api-Version" = "1.0"
+        "Authorization"   = "Bearer $($createAccessTokenResponse.access_token)"
     }
-    
-    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
-
-    # Add Authorization after printing splat
-    $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
-    #endregion Create headers
 
     if ($actionContext.Operation.ToLower() -ne "create") {
-        #region Verify account reference
         $actionMessage = "verifying account reference"
   
         if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
             throw "The account reference could not be found"
         }
-        #endregion Verify account reference
     }
+
     foreach ($fieldToCheck in $fieldsToCheck.PsObject.Properties | Where-Object { -not[String]::IsNullOrEmpty($_.Value.accountValue) }) {
-        #region Get account
         # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users
         $actionMessage = "calculating filter account for property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)]"
 
@@ -179,6 +165,7 @@ try {
         $getKPNLisaAccountSplatParams = @{
             Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users"
             Method      = "GET"
+            Headers     = $headers
             Body        = @{
                 filter = "$filter"
                 select = $selectPropertiesString
@@ -187,19 +174,12 @@ try {
             ErrorAction = "Stop"
         }
 
-        Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
-
-        # Add header after printing splat
-        $getKPNLisaAccountSplatParams['Headers'] = $headers
-
         $getKPNLisaAccountResponse = $null
         $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
         $correlatedAccount = $getKPNLisaAccountResponse.Value
     
-        Write-Verbose "Queried KPN Lisa account where [filter] = [$filter]. Result count: $(@($correlatedAccount).Count)"
-        #endregion Get account
+        Write-Information "Queried KPN Lisa account where [filter] = [$filter]. Result count: $(@($correlatedAccount).Count)"
 
-        #region Check property uniqueness
         $actionMessage = "checking if property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique"
         if (@($correlatedAccount).count -gt 0) {
             if ($actionContext.Operation.ToLower() -ne "create" -and $correlatedAccount.id -eq $actionContext.References.Account) {
@@ -259,13 +239,12 @@ try {
         elseif (@($correlatedAccount).count -eq 0) {
             Write-Information "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique."
         }
-        #endregion Check property uniqueness
     }
 
-    # Set Success to true
     $outputContext.Success = $true
 }
 catch {
+    $outputContext.Success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
@@ -277,13 +256,7 @@ catch {
         $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
         $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
-
-    # Set Success to false
-    $outputContext.Success = $false
-
     Write-Warning $warningMessage
-
-    # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
 }
 finally {

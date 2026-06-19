@@ -83,15 +83,17 @@ function Convert-StringToBoolean($obj) {
 
 #region Fields to check
 $fieldsToCheck = [PSCustomObject]@{
-    "userPrincipalName" = [PSCustomObject]@{
-        accountValue   = $actionContext.Data.userPrincipalName
-        keepInSyncWith = @("mail") # The properties to keep in sync with, if one of these properties isn't unique, this property wil be treated as not unique as well
-        crossCheckOn   = @("mail") # The properties to keep in cross-check on
+    'userPrincipalName' = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
+        systemFieldName = 'userPrincipalName' # Name of the field in KPN Lisa itself, to be used in the query to the system.
+        accountValue    = $actionContext.Data.userPrincipalName
+        keepInSyncWith  = @('mail') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
+        crossCheckOn    = @('mail', 'proxyAddresses') # Properties to cross-check for uniqueness.
     }
-    "mail"              = [PSCustomObject]@{ # This is the value that is returned to HelloID in NonUniqueFields
-        accountValue   = $actionContext.Data.mail
-        keepInSyncWith = @("userPrincipalName") # The properties to keep in sync with, if one of these properties isn't unique, this property wil be treated as not unique as well
-        crossCheckOn   = @("userPrincipalName") # The properties to keep in cross-check on
+    'mail'              = [PSCustomObject]@{ # Value returned to HelloID in NonUniqueFields.
+        systemFieldName = 'mail' # Name of the field in KPN Lisa itself, to be used in the query to the system.
+        accountValue    = $actionContext.Data.mail
+        keepInSyncWith  = @('userPrincipalName') # Properties to synchronize with. If this property isn't unique, these properties will also be treated as non-unique.
+        crossCheckOn    = @('userPrincipalName', 'proxyAddresses') # Properties to cross-check for uniqueness.
     }
 }
 #endregion Fields to check
@@ -120,7 +122,7 @@ try {
     
     $createAccessTokenResponse = Invoke-RestMethod @createAccessTokenSplatParams
     
-    Write-Information "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
+    Write-Verbose "Created access token. Expires in: $($createAccessTokenResponse.expiresIn | ConvertTo-Json)"
     #endregion Create access token
     
     #region Create headers
@@ -132,7 +134,7 @@ try {
         "Mwp-Api-Version" = "1.0"
     }
     
-    Write-Information "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
+    Write-Verbose "Created headers. Result (without Authorization): $($headers | ConvertTo-Json)."
 
     # Add Authorization after printing splat
     $headers['Authorization'] = "Bearer $($createAccessTokenResponse.access_token)"
@@ -150,27 +152,42 @@ try {
     foreach ($fieldToCheck in $fieldsToCheck.PsObject.Properties | Where-Object { -not[String]::IsNullOrEmpty($_.Value.accountValue) }) {
         #region Get account
         # API docs: https://mwpapi.kpnwerkplek.com/index.html, specific API call: GET /api/users
-        $actionMessage = "querying account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]"
+        $actionMessage = "calculating filter account for property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)]"
 
-        $filter = "$($fieldToCheck.Name) eq '$($fieldToCheck.Value.accountValue)'" 
-        if (($fieldToCheck.Value.crossCheckOn | Measure-Object).Count -ge 1) {
+        $filter = "$($fieldToCheck.Value.systemFieldName) eq '$($fieldToCheck.Value.accountValue)'" 
+        if (@($fieldToCheck.Value.crossCheckOn).Count -ge 1) {
             foreach ($fieldToCrossCheckOn in $fieldToCheck.Value.crossCheckOn) {
-                $filter = $filter + " OR $($fieldToCrossCheckOn) eq '$($fieldToCheck.Value.accountValue)'"
+                if ($fieldToCrossCheckOn -eq "proxyAddresses") {
+                    # Special handling for proxyAddresses which uses the any() operator
+                    $filter = $filter + " OR proxyAddresses/any(c:c eq 'SMTP:$($fieldToCheck.Value.accountValue)')"
+                }
+                else {
+                    $filter = $filter + " OR $($fieldToCrossCheckOn) eq '$($fieldToCheck.Value.accountValue)'"
+                }
             }
         }
+
+        $actionMessage = "querying KPN Lisa account where [filter] = [$filter]"
+
+        # Build select properties list
+        $selectProperties = @('id', $fieldToCheck.Value.systemFieldName)
+        if (@($fieldToCheck.Value.crossCheckOn).Count -ge 1) {
+            $selectProperties += $fieldToCheck.Value.crossCheckOn
+        }
+        $selectPropertiesString = ($selectProperties | Select-Object -Unique) -join ','
 
         $getKPNLisaAccountSplatParams = @{
             Uri         = "$($actionContext.Configuration.MWPApiBaseUrl)/users"
             Method      = "GET"
             Body        = @{
                 filter = "$filter"
-                select = "id,$($fieldToCheck.Name)"
+                select = $selectPropertiesString
             }
             Verbose     = $false
             ErrorAction = "Stop"
         }
 
-        Write-Information "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
+        Write-Verbose "SplatParams: $($getKPNLisaAccountSplatParams | ConvertTo-Json)"
 
         # Add header after printing splat
         $getKPNLisaAccountSplatParams['Headers'] = $headers
@@ -179,28 +196,67 @@ try {
         $getKPNLisaAccountResponse = Invoke-RestMethod @getKPNLisaAccountSplatParams
         $correlatedAccount = $getKPNLisaAccountResponse.Value
     
-        Write-Information "Queried account where [$($fieldToCheck.Name)] = [$($fieldToCheck.Value.accountValue)]. Result: $($correlatedAccount | ConvertTo-Json)"
+        Write-Verbose "Queried KPN Lisa account where [filter] = [$filter]. Result count: $(@($correlatedAccount).Count)"
         #endregion Get account
 
         #region Check property uniqueness
         $actionMessage = "checking if property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique"
-        if (($correlatedAccount | Measure-Object).count -gt 0) {
+        if (@($correlatedAccount).count -gt 0) {
             if ($actionContext.Operation.ToLower() -ne "create" -and $correlatedAccount.id -eq $actionContext.References.Account) {
                 Write-Information "Person is using property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] themselves."
             }
             else {
-                Write-Information "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique."
-                Write-Information "In use by: $($correlatedAccount | ConvertTo-Json)."
+                # Determine if this is a direct match or cross-check match
+                if ($correlatedAccount.$($fieldToCheck.Value.systemFieldName) -eq $fieldToCheck.Value.accountValue) {
+                    # Direct match: The field itself contains the value
+                    Write-Warning "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique. It is currently in use by account with ID [$($correlatedAccount.id)]."
+                }
+                else {
+                    # Cross-check match: The value exists in one of the crossCheckOn fields
+                    $matchedFieldName = $null
+                    $matchedFieldValue = $null
+                    
+                    if (@($fieldToCheck.Value.crossCheckOn).Count -ge 1) {
+                        foreach ($fieldToCrossCheckOn in $fieldToCheck.Value.crossCheckOn) {
+                            if ($fieldToCrossCheckOn -eq "proxyAddresses") {
+                                # Special handling for proxyAddresses (array field)
+                                if ($correlatedAccount.proxyAddresses -contains "SMTP:$($fieldToCheck.Value.accountValue)") {
+                                    $matchedFieldName = "proxyAddresses"
+                                    $matchedFieldValue = "SMTP:$($fieldToCheck.Value.accountValue)"
+                                    break
+                                }
+                            }
+                            else {
+                                # Regular field check
+                                if ($correlatedAccount.$fieldToCrossCheckOn -eq $fieldToCheck.Value.accountValue) {
+                                    $matchedFieldName = $fieldToCrossCheckOn
+                                    $matchedFieldValue = $fieldToCheck.Value.accountValue
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    
+                    if ($matchedFieldName) {
+                        Write-Warning "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique due to cross-check. The value exists as [$matchedFieldName] = [$matchedFieldValue] in use by account with ID [$($correlatedAccount.id)]."
+                    }
+                    else {
+                        # Fallback if we can't determine the exact field
+                        Write-Warning "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is not unique. In use by account with ID [$($correlatedAccount.id)]."
+                    }
+                }
+                
                 [void]$outputContext.NonUniqueFields.Add($fieldToCheck.Name)
         
-                if (($fieldToCheck.Value.keepInSyncWith | Measure-Object).Count -ge 1) {
-                    foreach ($fieldToKeepInSyncWith in $fieldToCheck.Value.keepInSyncWith | Where-Object { $_ -in $actionContext.Data.PsObject.Properties }) {
+                if (@($fieldToCheck.Value.keepInSyncWith).Count -ge 1) {
+                    foreach ($fieldToKeepInSyncWith in $fieldToCheck.Value.keepInSyncWith | Where-Object { $_ -in $actionContext.Data.PsObject.Properties.Name }) {
+                        Write-Warning "Property [$fieldToKeepInSyncWith] is marked as non-unique because it is configured to keepInSyncWith [$($fieldToCheck.Name)], which is not unique."
                         [void]$outputContext.NonUniqueFields.Add($fieldToKeepInSyncWith)
                     }
                 }
             }
         }
-        elseif (($correlatedAccount | Measure-Object).count -eq 0) {
+        elseif (@($correlatedAccount).count -eq 0) {
             Write-Information "Property [$($fieldToCheck.Name)] with value [$($fieldToCheck.Value.accountValue)] is unique."
         }
         #endregion Check property uniqueness
@@ -229,4 +285,7 @@ catch {
 
     # Required to write an error as uniqueness check doesn't show auditlog
     Write-Error $auditMessage
+}
+finally {
+    $outputContext.NonUniqueFields = @($outputContext.NonUniqueFields | Sort-Object -Unique)
 }

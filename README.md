@@ -23,6 +23,10 @@
     - [Field mapping](#field-mapping)
     - [Account Reference](#account-reference)
   - [Remarks](#remarks)
+    - [Uniqueness Check and Cross-Check Validation](#uniqueness-check-and-cross-check-validation)
+      - [Uniqueness Check](#uniqueness-check)
+      - [Cross-Check on Proxy Addresses](#cross-check-on-proxy-addresses)
+      - [keepInSyncWith Configuration](#keepinsyncwith-configuration)
     - [Workspace Profile](#workspace-profile)
     - [Persona](#persona)
     - [Manager Field in Field Mapping](#manager-field-in-field-mapping)
@@ -134,6 +138,39 @@ The field mapping can be imported by using the _fieldMapping.json_ file.
 The account reference is populated with the `id` property from KPN Lisa.
 
 ## Remarks
+
+### Uniqueness Check and Cross-Check Validation
+
+The connector performs comprehensive uniqueness validation before creating or updating accounts to prevent conflicts in KPN Lisa:
+
+#### Uniqueness Check
+
+The connector validates that the following fields are unique:
+- `userPrincipalName`
+- `mail`
+
+If a field value is already in use by another account, the connector will mark it as non-unique and prevent the operation to avoid conflicts.
+
+#### Cross-Check on Proxy Addresses
+
+The connector supports cross-checking field values against multiple properties, including `proxyAddresses`. This advanced validation ensures that a value doesn't exist anywhere it could cause conflicts.
+
+**How it works:**
+- When checking `userPrincipalName` or `mail` uniqueness, the connector also verifies the value doesn't exist in:
+  - The other field (e.g., `userPrincipalName` checks against `mail` and vice versa)
+  - `proxyAddresses` array (using the format `SMTP:value`)
+
+**Example:**  
+If you're creating an account with `userPrincipalName = "john.doe@company.com"`, the connector will verify that:
+1. No other account has `userPrincipalName = "john.doe@company.com"`
+2. No other account has `mail = "john.doe@company.com"`
+3. No other account has `"SMTP:john.doe@company.com"` in their `proxyAddresses` array
+
+**Note:** While not explicitly documented in the KPN Lisa API documentation, the API supports querying `proxyAddresses` using the OData `any()` operator for this validation. The connector uses filters like: `proxyAddresses/any(c:c eq 'SMTP:value')` to perform this check.
+
+#### keepInSyncWith Configuration
+
+Fields can be configured to stay synchronized. If one field fails the uniqueness check, all related fields marked with `keepInSyncWith` will also be marked as non-unique. This ensures that interdependent fields (like `userPrincipalName` and `mail`) remain consistent.
 
 ### Workspace Profile
 

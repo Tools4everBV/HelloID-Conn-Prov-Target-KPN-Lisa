@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- Added cross-check validation on `proxyAddresses` in uniqueness check to prevent conflicts across `userPrincipalName`, `mail`, and `proxyAddresses` fields.
+- Enhanced uniqueness check to use OData `any()` operator for querying `proxyAddresses` array (undocumented KPN Lisa API feature).
+- Improved uniqueness check logging to differentiate between direct field matches and cross-check matches.
+
+### Changed
+- Updated README with comprehensive documentation on uniqueness check and cross-check validation functionality.
 
 ## [2.2.0] - 2026-02-13
 ### Added
